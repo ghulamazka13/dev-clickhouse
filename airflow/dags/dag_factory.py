@@ -416,9 +416,7 @@ def build_pipeline_taskgroup(pipeline, dag):
             sql=snapshot_sql,
             params={
                 "pipeline_id": pipeline_id,
-                "run_id": "{{ ti.xcom_pull(task_ids='"
-                + f"{taskgroup.group_id}.snapshot_id"
-                + "') }}",
+                "snapshot_task_id": f"{taskgroup.group_id}.snapshot_id",
             },
         )
 
