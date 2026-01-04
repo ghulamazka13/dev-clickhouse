@@ -1,0 +1,317 @@
+You are a senior Data Engineer. Build an end-to-end open-source near real-time analytics POC with Medallion architecture + metadata-driven Airflow (main controller DAG + DAG generator).
+
+Goal
+- Dummy generator -> Kafka -> Kafka UI -> RisingWave -> PostgreSQL (Bronze raw landing)
+- Airflow orchestrates Silver/Gold transformations, aggregates (5m/1h/daily), backfills, data quality, monitoring/alerts, and optimization tasks.
+- Query engine: PostgreSQL + pg_duckdb (enable extension).
+- BI visualization: Apache Superset (must only access Gold).
+
+Key governance requirement (Medallion + access control)
+- Separate schemas: bronze (raw, restricted), silver (cleaned, restricted), gold (business, BI-accessible), control (metadata), monitoring (pipeline metrics).
+- Postgres roles:
+  1) rw_writer: used ONLY by RisingWave sink to insert into bronze (NO SELECT).
+  2) etl_runner: used by Airflow to read bronze and write silver/gold (SELECT bronze, DML silver/gold).
+  3) bi_reader: used by Superset (SELECT only on gold; NO access bronze/silver).
+- Enforce schema-level grants + default privileges so new tables inherit restrictions.
+- Superset must connect using bi_reader.
+
+Target latency
+- Near real-time: seconds–minutes for Bronze ingestion (streaming via RisingWave).
+- Silver/Gold: 5-min cadence for BI freshness; 1h/daily aggregates for performance.
+
+Hard constraints
+- 100% open source tools
+- Everything runs locally via Docker Compose (no cloud)
+- Pin versions
+- Deliver a complete runnable repo: docker-compose + configs + scripts + SQL + Airflow DAGs + README
+- Use dummy data now; later replace dummy producer with Logstash -> Kafka with minimal change.
+
+Toolstack
+- Kafka (Apache Kafka) + Kafka UI
+- RisingWave (consume Kafka, sink to Postgres)
+- PostgreSQL (use pgduckdb/pgduckdb image; enable pg_duckdb extension)
+- Apache Airflow (orchestrator + dynamic DAG generation)
+- Data quality: Soda Core (SQL-based) invoked from Airflow
+- Apache Superset (BI)
+
+Deliverable: generate the full repo file-by-file with paths and full contents.
+
+========================
+1) DATAFLOW OVERVIEW
+========================
+Dummy Producer (Python) -> Kafka topic raw.security_events (JSON)
+Kafka UI -> inspect raw.security_events
+RisingWave -> CREATE SOURCE from Kafka -> parse JSON -> sink into Postgres bronze.security_events_raw (append-only)
+Airflow -> build silver + gold + monitoring tables + DQ checks + alerts + snapshots
+Superset -> connects to Postgres as bi_reader -> only sees gold.*
+
+========================
+2) REPO STRUCTURE
+========================
+/docker-compose.yml
+/README.md
+
+/producer/
+  producer.py
+  requirements.txt
+  Dockerfile
+
+/kafka/
+  create-topics.sh
+
+/risingwave/
+  init.sql  (create source/table, parsing MV, sink to Postgres bronze)
+
+/postgres/
+  init/
+    00_extensions.sql                 (enable pg_duckdb)
+    01_roles_schemas_grants.sql       (bronze/silver/gold/control/monitoring + roles + grants + default privileges)
+    02_bronze_tables.sql              (bronze.security_events_raw)
+    03_control_metadata.sql           (control.pipeline_definitions, control.dq_rules, etc.)
+    04_monitoring_tables.sql          (monitoring.pipeline_runs, monitoring.lag_metrics, gold.dq_results, etc.)
+    05_seed_pipeline_definitions.sql  (insert metadata for security_events pipeline)
+
+/airflow/
+  dags/
+    main_controller_dag.py            (reads control.pipeline_definitions; triggers or generates TaskGroups)
+    dag_factory.py                    (function that builds per-pipeline TaskGroup/DAG from metadata)
+    backfill_maintenance_dag.py        (manual/daily maintenance + backfill)
+  include/
+    sql/
+      security_events/
+        silver.sql
+        gold_alerts_5m.sql
+        gold_alerts_1h.sql
+        gold_alerts_daily.sql
+        gold_top_talkers_daily.sql
+        gold_top_signatures_daily.sql
+        gold_protocol_mix_daily.sql
+        snapshot_gold.sql
+    dq/
+      soda_checks.yml
+  plugins/ (optional)
+
+ /superset/
+   superset_config.py (optional minimal)
+   bootstrap/README_superset.md (how to connect + datasets)
+
+ /scripts/
+   smoke_test.sh
+   psql_examples.sql
+   superset_sql_examples.sql
+
+========================
+3) KAFKA
+========================
+- Create topic: raw.security_events
+- Partitions: 3
+- Provide create-topics.sh and wire into docker-compose startup.
+
+Kafka UI
+- Configure to connect to Kafka broker and show topics/messages.
+- Show consumer group lag if available.
+
+========================
+4) DUMMY DATA GENERATOR (Python -> Kafka)
+========================
+- Continuously publish Zeek-like + Suricata-like JSON events to raw.security_events.
+- Env vars:
+  EVENTS_PER_SEC, MIX_ZEEK_PERCENT, MIX_SURICATA_PERCENT, SEED, KAFKA_BROKERS, KAFKA_TOPIC
+- Fields (minimum):
+  event_id (uuid)
+  event_time (ISO8601 ms)
+  sensor_type (zeek/suricata)
+  event_type (conn/alert/dns/http)
+  severity (low/medium/high)
+  src_ip, dest_ip, src_port, dest_port, protocol
+  bytes, packets
+  sensor_name
+  tags (array)
+  message (string)
+  zeek extras: uid, conn_state, duration, local_orig, local_resp
+  suricata extras: signature, signature_id, category, alert_action
+
+========================
+5) RISINGWAVE (Kafka -> Postgres Bronze)
+========================
+- In RisingWave init.sql:
+  1) CREATE SOURCE from Kafka raw.security_events (JSON)
+  2) Parse JSON into typed columns in a materialized view/table
+  3) CREATE SINK to Postgres table bronze.security_events_raw using rw_writer credentials
+- Ensure append-only behavior with event_id.
+- Keep RisingWave’s role limited to Bronze writing.
+
+========================
+6) POSTGRES (Storage + pg_duckdb)
+========================
+Use pgduckdb/pgduckdb docker image.
+- 00_extensions.sql:
+  CREATE EXTENSION IF NOT EXISTS pg_duckdb;
+
+- Bronze table (append-only):
+  bronze.security_events_raw(
+    event_id text primary key,
+    event_ts timestamptz,
+    sensor_type text,
+    sensor_name text,
+    event_type text,
+    severity text,
+    src_ip inet,
+    dest_ip inet,
+    src_port int,
+    dest_port int,
+    protocol text,
+    bytes bigint,
+    packets bigint,
+    uid text null,
+    conn_state text null,
+    duration double precision null,
+    signature text null,
+    signature_id int null,
+    category text null,
+    alert_action text null,
+    tags jsonb,
+    message text
+  )
+  Indexes: event_ts, severity, sensor_type, src_ip, dest_ip.
+
+- Silver table (cleaned/dedup/enriched):
+  silver.security_events(
+    event_id text primary key,
+    event_ts timestamptz,
+    event_date date,
+    event_hour timestamptz,
+    sensor_type text,
+    sensor_name text,
+    event_type text,
+    severity text,
+    severity_score int,
+    is_alert boolean,
+    src_ip inet,
+    dest_ip inet,
+    src_port int,
+    dest_port int,
+    protocol text,
+    bytes bigint,
+    packets bigint,
+    uid text,
+    conn_state text,
+    duration double precision,
+    signature text,
+    signature_id int,
+    category text,
+    alert_action text,
+    tags jsonb,
+    message text,
+    ingested_at timestamptz default now()
+  )
+
+- Gold tables:
+  gold.alerts_5m, gold.alerts_1h, gold.alerts_daily,
+  gold.top_talkers_daily, gold.top_signatures_daily, gold.protocol_mix_daily
+- Gold snapshots/time-travel:
+  gold.snapshot_runs(run_id uuid, run_ts timestamptz, pipeline_id text, status text, notes text)
+  and snapshot tables/views created by Airflow (or store snapshot partition columns).
+
+IMPORTANT: configure grants so bi_reader can only SELECT gold.* (and optionally monitoring views meant for BI).
+
+========================
+7) METADATA-DRIVEN AIRFLOW (MAIN DAG + DAG GENERATOR)
+========================
+Implement control tables:
+- control.pipeline_definitions:
+  pipeline_id (pk)
+  enabled bool
+  schedule_cron text
+  bronze_table text
+  silver_table text
+  gold_tables jsonb
+  silver_sql_path text
+  gold_sql_paths jsonb
+  dq_profile text
+  sla_minutes int
+  freshness_threshold_minutes int
+  owner text
+
+- control.dq_rules (optional):
+  pipeline_id
+  rule_name
+  rule_type (null_rate/allowed_values/volume_drop/schema_drift)
+  params jsonb
+  severity text
+
+Airflow design:
+A) main_controller_dag.py
+- Runs every 5 minutes.
+- Reads enabled pipelines from control.pipeline_definitions.
+- For each pipeline, calls dag_factory.build_pipeline_taskgroup(...) to generate a TaskGroup with standard steps.
+
+B) dag_factory.py standard TaskGroup steps (per pipeline)
+1) compute_lag: now() - max(bronze.event_ts); store into monitoring.lag_metrics
+2) schema_drift_check: ensure critical columns exist/types match; store results
+3) volume_check: events in last 5m vs baseline threshold; store results
+4) build_silver: execute silver SQL (incremental upsert from bronze -> silver)
+5) build_gold_5m/1h/daily: execute gold SQL files
+6) run_dq: run Soda Core checks; write results to gold.dq_results; fail on critical
+7) optimize: ANALYZE; (optional VACUUM in daily maintenance DAG)
+8) snapshot: insert into gold.snapshot_runs and snapshot gold outputs (copy or tag run_id)
+9) alerting: if lag/volume/DQ fails, emit alert (log + optional webhook env var)
+
+C) backfill_maintenance_dag.py
+- Manual trigger with params start_ts/end_ts and pipeline_id:
+  - Rebuild silver and gold for a date range (idempotent).
+- Daily maintenance:
+  - VACUUM/ANALYZE, optional REINDEX, partition tasks (optional).
+
+Use Airflow connections/variables for:
+- Postgres etl_runner creds
+- Soda checks config
+- Optional alert webhook
+
+========================
+8) DATA QUALITY (Soda Core)
+========================
+- Provide soda_checks.yml for security_events:
+  - No missing event_ts
+  - Allowed severity values
+  - Duplicate event_id == 0 in silver
+  - Volume anomaly (last 5m not below threshold)
+- Run via Airflow task, store results into gold.dq_results and/or monitoring tables.
+
+========================
+9) SUPERSET (BI)
+========================
+- Superset connects to Postgres using bi_reader.
+- Only expose gold schema datasets.
+- Provide bootstrap instructions + example charts/dashboards:
+  Dashboard: Executive Overview (alerts trend, severity dist, top signatures)
+  Dashboard: Network Activity (top talkers, protocol mix)
+  Dashboard: Pipeline Health (lag trend, DQ trend) - optional if you expose monitoring views to BI.
+
+========================
+10) SMOKE TEST
+========================
+scripts/smoke_test.sh:
+- docker compose up -d
+- create topic
+- start producer
+- verify messages exist via kafka-ui (or kafka CLI)
+- verify risingwave sink writes to bronze (row count increasing)
+- trigger Airflow controller DAG once; verify silver/gold tables populated
+- connect Superset and run sample queries
+
+========================
+11) FUTURE: CONNECT LOGSTASH
+========================
+In README, add Logstash Kafka output snippet producing to raw.security_events.
+Explain: downstream remains unchanged.
+
+NOW: Generate the complete runnable repo with:
+- docker-compose.yml (pinned versions)
+- all SQL init scripts
+- RisingWave init.sql
+- Airflow DAGs + factory + SQL files + Soda config
+- producer code
+- smoke test + example SQL
+- README with run steps and troubleshooting
+Output file-by-file with full contents (paths + content).

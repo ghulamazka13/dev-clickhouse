@@ -1,0 +1,6 @@
+checks for silver.security_events:
+  - missing_count(event_ts) = 0
+  - invalid_count(severity) = 0:
+      valid_values: ["low", "medium", "high"]
+  - duplicate_count(event_id) = 0
+  - row_count >= 1
