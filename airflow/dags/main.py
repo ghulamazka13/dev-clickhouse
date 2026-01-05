@@ -4,6 +4,7 @@ import os
 
 import redis
 
+from airflow import DAG  # imported so Airflow safe mode parses this file
 from dag_factory import build_datasource_to_dwh_dag
 
 REDIS_HOST = os.environ.get("METADATA_REDIS_HOST", "metadata-redis")

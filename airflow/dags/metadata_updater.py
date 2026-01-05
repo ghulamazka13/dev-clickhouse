@@ -2,7 +2,6 @@ import json
 import logging
 import os
 
-import pendulum
 import redis
 
 try:
@@ -259,7 +258,6 @@ with DAG(
     schedule_interval="*/5 * * * *",
     catchup=False,
     tags=["metadata", "redis"],
-    timezone=pendulum.timezone("Asia/Jakarta"),
 ) as dag:
     update_task = PythonOperator(
         task_id="update_metadata",

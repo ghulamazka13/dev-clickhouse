@@ -6,7 +6,6 @@ import subprocess
 import sys
 import uuid
 
-import pendulum
 from airflow import DAG
 from airflow.exceptions import AirflowException
 from airflow.operators.empty import EmptyOperator
@@ -460,7 +459,7 @@ def build_pipeline_taskgroup(pipeline, dag):
     return taskgroup
 
 
-QUALIFIED_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$")
+QUALIFIED_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -700,7 +699,6 @@ def build_datasource_to_dwh_dag(dag_cfg):
         max_active_runs=1,
         max_active_tasks=max_active_tasks,
         tags=tags,
-        timezone=pendulum.timezone(timezone),
     ) as dag:
         start = EmptyOperator(task_id="start")
         end = EmptyOperator(task_id="end")
