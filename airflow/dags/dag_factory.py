@@ -1,14 +1,19 @@
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import uuid
 
+import pendulum
+from airflow import DAG
 from airflow.exceptions import AirflowException
+from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.postgres.operators.postgres import PostgresOperator
+from airflow.utils.dates import days_ago
 from airflow.utils.state import State
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
@@ -453,3 +458,257 @@ def build_pipeline_taskgroup(pipeline, dag):
         snapshot >> alert_task >> end_run
 
     return taskgroup
+
+
+QUALIFIED_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$")
+IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _ensure_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+        return parsed if isinstance(parsed, list) else []
+    if isinstance(value, set):
+        return list(value)
+    return []
+
+
+def _require_qualified_name(value, field_name):
+    if not isinstance(value, str) or not QUALIFIED_NAME_RE.match(value):
+        raise AirflowException(f"Invalid {field_name}: {value}")
+    return value
+
+
+def _require_identifier(value, field_name):
+    if not isinstance(value, str) or not IDENTIFIER_RE.match(value):
+        raise AirflowException(f"Invalid {field_name}: {value}")
+    return value
+
+
+def _resolve_sql_path(path):
+    if not path:
+        raise AirflowException("sql_merge_path is required")
+    if path.startswith("/"):
+        return path
+    if path.startswith("airflow/"):
+        return os.path.join("/opt/airflow", path[len("airflow/") :])
+    return os.path.join("/opt/airflow", path)
+
+
+def _render_merge_sql(template_path, replacements):
+    path = _resolve_sql_path(template_path)
+    if not os.path.exists(path):
+        raise AirflowException(f"Merge SQL template not found: {path}")
+    with open(path, "r", encoding="utf-8") as handle:
+        sql_template = handle.read()
+    for key, value in replacements.items():
+        sql_template = sql_template.replace(f"{{{{{key}}}}}", value)
+    return sql_template
+
+
+def freshness_check(
+    pipeline_id,
+    datasource_table,
+    datasource_timestamp_column,
+    freshness_threshold_minutes,
+    **_,
+):
+    datasource_table = _require_qualified_name(datasource_table, "datasource_table")
+    ts_col = _require_identifier(
+        datasource_timestamp_column, "datasource_timestamp_column"
+    )
+    hook = _get_hook()
+    row = hook.get_first(
+        f"SELECT EXTRACT(EPOCH FROM (now() - max({ts_col}))) AS lag_seconds FROM {datasource_table}"
+    )
+    lag_seconds = row[0] if row else None
+    if lag_seconds is None:
+        raise AirflowException(
+            f"Freshness check failed for {pipeline_id}: no data in {datasource_table}"
+        )
+    threshold_seconds = int(freshness_threshold_minutes or 0) * 60
+    if lag_seconds > threshold_seconds:
+        raise AirflowException(
+            f"Freshness check failed for {pipeline_id}: lag {lag_seconds}s exceeds {threshold_seconds}s"
+        )
+    logging.info(
+        "Freshness check passed for %s: lag_seconds=%s", pipeline_id, lag_seconds
+    )
+
+
+def schema_check(pipeline_id, datasource_table, expected_columns, **_):
+    datasource_table = _require_qualified_name(datasource_table, "datasource_table")
+    expected = _ensure_list(expected_columns)
+    if not expected:
+        logging.info("Schema check skipped for %s: no expected columns", pipeline_id)
+        return
+    for column_name in expected:
+        _require_identifier(column_name, "expected_columns")
+    schema_name, table_name = datasource_table.split(".")
+    hook = _get_hook()
+    rows = hook.get_records(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = %s AND table_name = %s
+        """,
+        parameters=(schema_name, table_name),
+    )
+    actual = {row[0] for row in rows}
+    missing = sorted(set(expected) - actual)
+    if missing:
+        raise AirflowException(
+            f"Schema check failed for {pipeline_id}: missing columns {missing}"
+        )
+    logging.info("Schema check passed for %s", pipeline_id)
+
+
+def merge_to_datawarehouse(
+    pipeline_id,
+    datasource_table,
+    datasource_timestamp_column,
+    datawarehouse_table,
+    unique_key,
+    merge_window_minutes,
+    expected_columns,
+    sql_merge_path,
+    **_,
+):
+    datasource_table = _require_qualified_name(datasource_table, "datasource_table")
+    datawarehouse_table = _require_qualified_name(
+        datawarehouse_table, "datawarehouse_table"
+    )
+    ts_col = _require_identifier(
+        datasource_timestamp_column, "datasource_timestamp_column"
+    )
+    unique_key = _require_identifier(unique_key, "unique_key")
+    columns = [_require_identifier(col, "expected_columns") for col in _ensure_list(expected_columns)]
+    if not columns:
+        raise AirflowException(
+            f"Merge failed for {pipeline_id}: expected_columns is required"
+        )
+    window_minutes = int(merge_window_minutes or 0)
+    column_list = ", ".join(columns)
+    update_set = ",\n  ".join(f"{col} = EXCLUDED.{col}" for col in columns)
+    index_name = f"ux_{datawarehouse_table.replace('.', '_')}_{unique_key}"
+    merge_sql = _render_merge_sql(
+        sql_merge_path,
+        {
+            "DATASOURCE_TABLE": datasource_table,
+            "DATAWAREHOUSE_TABLE": datawarehouse_table,
+            "TS_COL": ts_col,
+            "UNIQUE_KEY": unique_key,
+            "WINDOW_MINUTES": str(window_minutes),
+            "COLUMN_LIST": column_list,
+            "UPDATE_SET": update_set,
+            "UNIQUE_INDEX_NAME": index_name,
+        },
+    )
+    hook = _get_hook()
+    hook.run(merge_sql)
+    logging.info("Merge completed for %s into %s", pipeline_id, datawarehouse_table)
+
+
+def build_datasource_to_dwh_taskgroup(pipeline, dag):
+    pipeline_id = pipeline["pipeline_id"]
+    datasource_table = pipeline["datasource_table"]
+    datasource_timestamp_column = pipeline["datasource_timestamp_column"]
+    datawarehouse_table = pipeline["datawarehouse_table"]
+    unique_key = pipeline["unique_key"]
+    merge_window_minutes = pipeline.get("merge_window_minutes", 10)
+    expected_columns = _ensure_list(pipeline.get("expected_columns"))
+    sql_merge_path = pipeline["sql_merge_path"]
+    freshness_threshold_minutes = pipeline.get("freshness_threshold_minutes", 2)
+
+    with TaskGroup(group_id=f"{pipeline_id}_pipeline", dag=dag) as taskgroup:
+        freshness_task = PythonOperator(
+            task_id="freshness_check",
+            python_callable=freshness_check,
+            op_kwargs={
+                "pipeline_id": pipeline_id,
+                "datasource_table": datasource_table,
+                "datasource_timestamp_column": datasource_timestamp_column,
+                "freshness_threshold_minutes": freshness_threshold_minutes,
+            },
+        )
+
+        schema_task = PythonOperator(
+            task_id="schema_check",
+            python_callable=schema_check,
+            op_kwargs={
+                "pipeline_id": pipeline_id,
+                "datasource_table": datasource_table,
+                "expected_columns": expected_columns,
+            },
+        )
+
+        merge_task = PythonOperator(
+            task_id="merge_to_datawarehouse",
+            python_callable=merge_to_datawarehouse,
+            op_kwargs={
+                "pipeline_id": pipeline_id,
+                "datasource_table": datasource_table,
+                "datasource_timestamp_column": datasource_timestamp_column,
+                "datawarehouse_table": datawarehouse_table,
+                "unique_key": unique_key,
+                "merge_window_minutes": merge_window_minutes,
+                "expected_columns": expected_columns,
+                "sql_merge_path": sql_merge_path,
+            },
+        )
+
+        analyze_task = PostgresOperator(
+            task_id="analyze_target",
+            postgres_conn_id="analytics_db",
+            sql=f"ANALYZE {datawarehouse_table};",
+        )
+
+        freshness_task >> schema_task >> merge_task >> analyze_task
+
+    return taskgroup
+
+
+def build_datasource_to_dwh_dag(dag_cfg):
+    dag_name = dag_cfg["dag_name"]
+    schedule_cron = dag_cfg.get("schedule_cron") or "*/5 * * * *"
+    timezone = dag_cfg.get("timezone") or "Asia/Jakarta"
+    owner = dag_cfg.get("owner") or "data-eng"
+    tags = _ensure_list(dag_cfg.get("tags")) or []
+    max_active_tasks = int(dag_cfg.get("max_active_tasks") or 8)
+    pipelines = dag_cfg.get("pipelines") or []
+
+    default_args = {
+        "owner": owner,
+        "retries": 1,
+    }
+
+    with DAG(
+        dag_id=dag_name,
+        default_args=default_args,
+        start_date=days_ago(1),
+        schedule_interval=schedule_cron,
+        catchup=False,
+        max_active_runs=1,
+        max_active_tasks=max_active_tasks,
+        tags=tags,
+        timezone=pendulum.timezone(timezone),
+    ) as dag:
+        start = EmptyOperator(task_id="start")
+        end = EmptyOperator(task_id="end")
+
+        for pipeline in pipelines:
+            if not pipeline.get("enabled", True):
+                continue
+            taskgroup = build_datasource_to_dwh_taskgroup(pipeline, dag)
+            start >> taskgroup >> end
+
+    return dag

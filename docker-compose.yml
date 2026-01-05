@@ -70,6 +70,16 @@ services:
       timeout: 5s
       retries: 10
 
+  metadata-redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
   risingwave:
     image: risingwavelabs/risingwave:v1.7.0
     ports:
@@ -126,7 +136,7 @@ services:
       - _AIRFLOW_WWW_USER_FIRSTNAME=Admin
       - _AIRFLOW_WWW_USER_LASTNAME=User
       - _AIRFLOW_WWW_USER_EMAIL=azka.ghulam13@gmail.com
-      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core-postgres==3.4.0
+      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core-postgres==3.4.0 redis==5.0.6
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/include:/opt/airflow/include
@@ -158,12 +168,16 @@ services:
       - AIRFLOW__WEBSERVER__SECRET_KEY=airflowsecret
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW_CONN_ANALYTICS_DB=postgresql://etl_runner:etl_runner@postgres:5432/analytics
+      - METADATA_REDIS_HOST=metadata-redis
+      - METADATA_REDIS_PORT=6379
+      - METADATA_REDIS_DB=0
+      - METADATA_REDIS_KEY=pipelines
       - SODA_POSTGRES_HOST=postgres
       - SODA_POSTGRES_PORT=5432
       - SODA_POSTGRES_DB=analytics
       - SODA_POSTGRES_USERNAME=etl_runner
       - SODA_POSTGRES_PASSWORD=etl_runner
-      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core-postgres==3.4.0
+      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core-postgres==3.4.0 redis==5.0.6
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/include:/opt/airflow/include
@@ -180,12 +194,16 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=H8oF2K4U7b8C3jY2nG9YF0pI5J6kT8mP1qR2sX3u4vE=
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW_CONN_ANALYTICS_DB=postgresql://etl_runner:etl_runner@postgres:5432/analytics
+      - METADATA_REDIS_HOST=metadata-redis
+      - METADATA_REDIS_PORT=6379
+      - METADATA_REDIS_DB=0
+      - METADATA_REDIS_KEY=pipelines
       - SODA_POSTGRES_HOST=postgres
       - SODA_POSTGRES_PORT=5432
       - SODA_POSTGRES_DB=analytics
       - SODA_POSTGRES_USERNAME=etl_runner
       - SODA_POSTGRES_PASSWORD=etl_runner
-      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core-postgres==3.4.0
+      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core-postgres==3.4.0 redis==5.0.6
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/include:/opt/airflow/include
