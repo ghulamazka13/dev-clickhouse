@@ -76,6 +76,10 @@ TYPE_ALIASES = {
 }
 
 
+class NoTemplatePythonOperator(PythonOperator):
+    template_fields: tuple[str, ...] = ()
+
+
 def _parse_json_value(value):
     if value is None:
         return None
@@ -129,44 +133,6 @@ def normalize_pipeline(pipeline):
     normalized = dict(pipeline)
     for key in ("gold_tables", "gold_sql_paths"):
         normalized[key] = _ensure_list(normalized.get(key))
-    return normalized
-
-
-def _safe_task_id(value, max_length=80):
-    if not value:
-        return "sql_step"
-    cleaned = re.sub(r"[^A-Za-z0-9_]+", "_", str(value)).strip("_")
-    if not cleaned:
-        cleaned = "sql_step"
-    return cleaned[:max_length]
-
-
-def _normalize_sql_steps(steps):
-    normalized = []
-    for step in _ensure_list(steps):
-        if not isinstance(step, dict):
-            continue
-        sql_text = step.get("sql_text") or step.get("sql")
-        if not sql_text:
-            continue
-        step_name = step.get("step_name") or step.get("name") or "sql_step"
-        step_order = step.get("step_order") or step.get("order") or 0
-        step_id = step.get("id")
-        try:
-            step_order = int(step_order)
-        except Exception:
-            step_order = 0
-        normalized.append(
-            {
-                "id": step_id,
-                "step_name": step_name,
-                "step_order": step_order,
-                "sql_text": sql_text,
-            }
-        )
-    normalized.sort(
-        key=lambda item: (item["step_order"], item["id"] or 0, item["step_name"])
-    )
     return normalized
 
 
@@ -253,22 +219,8 @@ def _require_identifier(value, field_name):
     return value
 
 
-def _resolve_sql_path(path):
-    if not path:
-        raise AirflowException("sql_merge_path is required")
-    if path.startswith("/"):
-        return path
-    if path.startswith("airflow/"):
-        return os.path.join("/opt/airflow", path[len("airflow/") :])
-    return os.path.join("/opt/airflow", path)
-
-
-def _render_merge_sql(template_path, replacements):
-    path = _resolve_sql_path(template_path)
-    if not os.path.exists(path):
-        raise AirflowException(f"Merge SQL template not found: {path}")
-    with open(path, "r", encoding="utf-8") as handle:
-        sql_template = handle.read()
+def _render_merge_sql_text(sql_text, replacements):
+    sql_template = sql_text
     for key, value in replacements.items():
         sql_template = sql_template.replace(f"{{{{{key}}}}}", value)
     return sql_template
@@ -807,7 +759,7 @@ def merge_to_datawarehouse(
     unique_key,
     merge_window_minutes,
     expected_columns,
-    sql_merge_path,
+    merge_sql_text,
     **context,
 ):
     logging.info(
@@ -828,14 +780,17 @@ def merge_to_datawarehouse(
         _require_identifier(col, "expected_columns")
         for col in _ensure_list(expected_columns)
     ]
-    if not columns:
-        logging.error("Merge failed for %s: expected_columns is empty", pipeline_id)
+    if not merge_sql_text:
+        logging.error("Merge failed for %s: merge_sql_text is empty", pipeline_id)
         raise AirflowException(
-            f"Merge failed for {pipeline_id}: expected_columns is required"
+            f"Merge failed for {pipeline_id}: merge_sql_text is required"
         )
     window_minutes = int(merge_window_minutes or 0)
     column_list = ", ".join(columns)
     update_set = ",\n  ".join(f"{col} = EXCLUDED.{col}" for col in columns)
+    merge_update_cols = [col for col in columns if col != unique_key]
+    merge_update_set = ",\n  ".join(f"{col} = source.{col}" for col in merge_update_cols)
+    source_column_list = ", ".join(f"source.{col}" for col in columns)
     index_name = f"ux_{datawarehouse_table.replace('.', '_')}_{unique_key}"
     start_ts, end_ts = _get_manual_window(context)
     if start_ts and end_ts:
@@ -852,20 +807,41 @@ def merge_to_datawarehouse(
         window_minutes,
         time_filter,
     )
-    merge_sql = _render_merge_sql(
-        sql_merge_path,
-        {
-            "DATASOURCE_TABLE": datasource_table,
-            "DATAWAREHOUSE_TABLE": datawarehouse_table,
-            "TS_COL": ts_col,
-            "UNIQUE_KEY": unique_key,
-            "WINDOW_MINUTES": str(window_minutes),
-            "TIME_FILTER": time_filter,
-            "COLUMN_LIST": column_list,
-            "UPDATE_SET": update_set,
-            "UNIQUE_INDEX_NAME": index_name,
-        },
-    )
+    replacements = {
+        "DATASOURCE_TABLE": datasource_table,
+        "DATAWAREHOUSE_TABLE": datawarehouse_table,
+        "TS_COL": ts_col,
+        "UNIQUE_KEY": unique_key,
+        "WINDOW_MINUTES": str(window_minutes),
+        "TIME_FILTER": time_filter,
+        "COLUMN_LIST": column_list,
+        "UPDATE_SET": update_set,
+        "UNIQUE_INDEX_NAME": index_name,
+    }
+    if not column_list and any(
+        token in merge_sql_text
+        for token in (
+            "{{COLUMN_LIST}}",
+            "{{UPDATE_SET}}",
+            "{{MERGE_UPDATE_SET}}",
+            "{{SOURCE_COLUMN_LIST}}",
+        )
+    ):
+        logging.error("Merge failed for %s: expected_columns is empty", pipeline_id)
+        raise AirflowException(
+            f"Merge failed for {pipeline_id}: expected_columns is required"
+        )
+    if not merge_update_set and "{{MERGE_UPDATE_SET}}" in merge_sql_text:
+        logging.error("Merge failed for %s: merge update columns are empty", pipeline_id)
+        raise AirflowException(
+            f"Merge failed for {pipeline_id}: merge update columns are required"
+        )
+    replacements["START_TS"] = start_ts or ""
+    replacements["END_TS"] = end_ts or ""
+    replacements["MERGE_UPDATE_SET"] = merge_update_set
+    replacements["SOURCE_COLUMN_LIST"] = source_column_list
+    logging.info("Using merge SQL text for %s", pipeline_id)
+    merge_sql = _render_merge_sql_text(merge_sql_text, replacements)
     hook = _get_hook()
     hook.run(merge_sql)
     logging.info("Merge completed for %s into %s", pipeline_id, datawarehouse_table)
@@ -882,8 +858,6 @@ def build_datasource_to_dwh_taskgroup(pipeline, dag):
     if not expected_columns and target_table_schema:
         normalized_schema = _normalize_schema(target_table_schema)
         expected_columns = [entry["name"] for entry in normalized_schema if entry.get("name")]
-    sql_steps = _normalize_sql_steps(pipeline.get("sql_steps"))
-    sql_merge_path = pipeline["sql_merge_path"]
     freshness_threshold_minutes = pipeline.get("freshness_threshold_minutes", 2)
 
     with TaskGroup(group_id=f"{pipeline_id}_pipeline", dag=dag) as taskgroup:
@@ -914,7 +888,7 @@ def build_datasource_to_dwh_taskgroup(pipeline, dag):
             },
         )
 
-        merge_task = PythonOperator(
+        merge_task = NoTemplatePythonOperator(
             task_id="merge_to_datawarehouse",
             python_callable=merge_to_datawarehouse,
             op_kwargs={
@@ -925,7 +899,7 @@ def build_datasource_to_dwh_taskgroup(pipeline, dag):
                 "unique_key": unique_key,
                 "merge_window_minutes": merge_window_minutes,
                 "expected_columns": expected_columns,
-                "sql_merge_path": sql_merge_path,
+                "merge_sql_text": pipeline.get("merge_sql_text"),
             },
         )
 
@@ -935,24 +909,7 @@ def build_datasource_to_dwh_taskgroup(pipeline, dag):
             sql=f"ANALYZE {datawarehouse_table};",
         )
 
-        if sql_steps:
-            step_tasks = []
-            for idx, step in enumerate(sql_steps, start=1):
-                task_id = f"sql_{step['step_order']}_{idx}_{_safe_task_id(step['step_name'])}"
-                task_id = task_id[:80]
-                step_tasks.append(
-                    PostgresOperator(
-                        task_id=task_id,
-                        postgres_conn_id="analytics_db",
-                        sql=step["sql_text"],
-                    )
-                )
-            gate >> freshness_task >> schema_task >> merge_task >> step_tasks[0]
-            for upstream, downstream in zip(step_tasks, step_tasks[1:]):
-                upstream >> downstream
-            step_tasks[-1] >> analyze_task
-        else:
-            gate >> freshness_task >> schema_task >> merge_task >> analyze_task
+        gate >> freshness_task >> schema_task >> merge_task >> analyze_task
 
     return taskgroup
 
@@ -1048,30 +1005,7 @@ def _normalize_pipeline_tables(
     )
 
 
-def _fetch_sql_steps(hook):
-    rows = hook.get_records(
-        """
-        SELECT pipeline_db_id, id, step_name, step_order, sql_text
-        FROM control.datasource_to_dwh_sql_steps
-        WHERE enabled = true
-        ORDER BY pipeline_db_id, step_order, id
-        """
-    )
-    steps = {}
-    for row in rows:
-        pipeline_db_id, step_id, step_name, step_order, sql_text = row
-        steps.setdefault(pipeline_db_id, []).append(
-            {
-                "id": step_id,
-                "step_name": step_name,
-                "step_order": step_order,
-                "sql_text": sql_text,
-            }
-        )
-    return steps
-
-
-def _fetch_pipelines(hook, dag_configs, sql_steps_map=None):
+def _fetch_pipelines(hook, dag_configs):
     rows = hook.get_records(
         """
         SELECT p.pipeline_id, p.id, p.dag_id, dc.dag_name, p.enabled, p.description,
@@ -1079,7 +1013,7 @@ def _fetch_pipelines(hook, dag_configs, sql_steps_map=None):
                p.target_schema, p.target_table_name, p.target_table_schema,
                p.datasource_table, p.datawarehouse_table,
                p.unique_key, p.merge_window_minutes, p.expected_columns,
-               p.sql_merge_path, p.freshness_threshold_minutes, p.sla_minutes
+               p.merge_sql_text, p.freshness_threshold_minutes, p.sla_minutes
         FROM control.datasource_to_dwh_pipelines p
         INNER JOIN control.dag_configs dc ON p.dag_id = dc.id
         WHERE p.enabled = true
@@ -1105,7 +1039,7 @@ def _fetch_pipelines(hook, dag_configs, sql_steps_map=None):
             unique_key,
             merge_window_minutes,
             expected_columns,
-            sql_merge_path,
+            merge_sql_text,
             freshness_threshold_minutes,
             sla_minutes,
         ) = row
@@ -1123,9 +1057,6 @@ def _fetch_pipelines(hook, dag_configs, sql_steps_map=None):
             datawarehouse_table,
         )
         target_table_schema = _parse_json_value(target_table_schema)
-        sql_steps = []
-        if sql_steps_map and pipeline_db_id in sql_steps_map:
-            sql_steps = sql_steps_map[pipeline_db_id]
         dag_cfg = dag_configs.get(dag_id)
         if not dag_cfg:
             continue
@@ -1147,10 +1078,9 @@ def _fetch_pipelines(hook, dag_configs, sql_steps_map=None):
                 "unique_key": unique_key,
                 "merge_window_minutes": merge_window_minutes,
                 "expected_columns": _ensure_list(expected_columns),
-                "sql_merge_path": sql_merge_path,
+                "merge_sql_text": merge_sql_text,
                 "freshness_threshold_minutes": freshness_threshold_minutes,
                 "sla_minutes": sla_minutes,
-                "sql_steps": sql_steps,
             }
         )
 
@@ -1184,8 +1114,7 @@ class DatasourceToDwhGenerator:
             dag_configs = _fetch_dag_configs(hook)
             if not dag_configs:
                 return []
-            sql_steps_map = _fetch_sql_steps(hook)
-            _fetch_pipelines(hook, dag_configs, sql_steps_map)
+            _fetch_pipelines(hook, dag_configs)
             return list(dag_configs.values())
         except Exception as exc:
             logging.warning("Postgres metadata unavailable: %s", exc)

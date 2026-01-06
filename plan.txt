@@ -258,17 +258,9 @@ Implement control tables (metadata source of truth):
   unique_key text
   merge_window_minutes int
   expected_columns jsonb
-  sql_merge_path text
+  merge_sql_text text
   freshness_threshold_minutes int
   sla_minutes int
-
-- control.datasource_to_dwh_sql_steps:
-  id (pk)
-  pipeline_db_id (fk)
-  step_name text
-  step_order int
-  sql_text text
-  enabled bool
 
 Airflow design:
 A) metadata_updater.py

@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS control.datasource_to_dwh_pipelines (
   unique_key text NOT NULL,
   merge_window_minutes int NOT NULL DEFAULT 10,
   expected_columns jsonb NOT NULL DEFAULT '[]'::jsonb,
-  sql_merge_path text NOT NULL,
+  merge_sql_text text NOT NULL,
   freshness_threshold_minutes int NOT NULL DEFAULT 2,
   sla_minutes int NOT NULL DEFAULT 10,
   source_db_id int REFERENCES control.database_connections(id),
@@ -43,18 +43,6 @@ CREATE TABLE IF NOT EXISTS control.datasource_to_dwh_pipelines (
   target_table_name text,
   target_table_schema jsonb
 );
-
-CREATE TABLE IF NOT EXISTS control.datasource_to_dwh_sql_steps (
-  id serial PRIMARY KEY,
-  pipeline_db_id int NOT NULL REFERENCES control.datasource_to_dwh_pipelines(id),
-  step_name text NOT NULL,
-  step_order int NOT NULL DEFAULT 1,
-  sql_text text NOT NULL,
-  enabled boolean NOT NULL DEFAULT true
-);
-
-CREATE INDEX IF NOT EXISTS idx_dwh_sql_steps_pipeline
-  ON control.datasource_to_dwh_sql_steps(pipeline_db_id, step_order);
 
 INSERT INTO control.database_connections (
   db_name, db_type, db_host, db_port, username, db_conn_name, gsm_path
@@ -105,7 +93,7 @@ INSERT INTO control.datasource_to_dwh_pipelines (
   unique_key,
   merge_window_minutes,
   expected_columns,
-  sql_merge_path,
+  merge_sql_text,
   freshness_threshold_minutes,
   sla_minutes,
   source_db_id,
@@ -149,7 +137,29 @@ INSERT INTO control.datasource_to_dwh_pipelines (
     "tags",
     "message"
   ]'::jsonb,
-  'airflow/include/sql/security_events/datawarehouse_base_merge.sql',
+  $$
+  CREATE TABLE IF NOT EXISTS {{DATAWAREHOUSE_TABLE}} (
+    LIKE {{DATASOURCE_TABLE}} INCLUDING ALL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS {{UNIQUE_INDEX_NAME}}
+    ON {{DATAWAREHOUSE_TABLE}} ({{UNIQUE_KEY}});
+
+  WITH source_data AS (
+    SELECT {{COLUMN_LIST}}
+    FROM {{DATASOURCE_TABLE}}
+    WHERE {{TIME_FILTER}}
+  )
+  MERGE INTO {{DATAWAREHOUSE_TABLE}} AS target
+  USING source_data AS source
+    ON target.{{UNIQUE_KEY}} = source.{{UNIQUE_KEY}}
+  WHEN MATCHED THEN
+    UPDATE SET
+      {{MERGE_UPDATE_SET}}
+  WHEN NOT MATCHED THEN
+    INSERT ({{COLUMN_LIST}})
+    VALUES ({{SOURCE_COLUMN_LIST}});
+  $$,
   2,
   10,
   (SELECT id FROM control.database_connections WHERE db_conn_name = 'analytics_db'),
@@ -193,7 +203,7 @@ ON CONFLICT (pipeline_id) DO UPDATE SET
   unique_key = EXCLUDED.unique_key,
   merge_window_minutes = EXCLUDED.merge_window_minutes,
   expected_columns = EXCLUDED.expected_columns,
-  sql_merge_path = EXCLUDED.sql_merge_path,
+  merge_sql_text = EXCLUDED.merge_sql_text,
   freshness_threshold_minutes = EXCLUDED.freshness_threshold_minutes,
   sla_minutes = EXCLUDED.sla_minutes,
   source_db_id = EXCLUDED.source_db_id,

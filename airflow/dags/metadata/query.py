@@ -47,7 +47,7 @@ class MetadataQuery:
                 p.unique_key,
                 p.merge_window_minutes,
                 p.expected_columns,
-                p.sql_merge_path,
+                p.merge_sql_text,
                 p.freshness_threshold_minutes,
                 p.sla_minutes
             FROM control.datasource_to_dwh_pipelines p
@@ -69,22 +69,9 @@ class MetadataQuery:
                 pb.unique_key,
                 pb.merge_window_minutes,
                 pb.expected_columns,
-                pb.sql_merge_path,
+                pb.merge_sql_text,
                 pb.freshness_threshold_minutes,
                 pb.sla_minutes,
-                COALESCE(
-                    (
-                        SELECT JSON_AGG(ROW_TO_JSON(s) ORDER BY s.step_order, s.id)
-                        FROM (
-                            SELECT id, step_name, step_order, sql_text
-                            FROM control.datasource_to_dwh_sql_steps
-                            WHERE pipeline_db_id = pb.pipeline_db_id
-                              AND enabled IS TRUE
-                            ORDER BY step_order, id
-                        ) s
-                    ),
-                    '[]'::json
-                ) AS sql_steps,
                 pb.source_db_id,
                 pb.target_db_id,
                 src.database_conn AS source_database_conn,
