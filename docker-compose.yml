@@ -254,7 +254,7 @@ services:
           --username admin \
           --firstname Admin \
           --lastname User \
-          --email admin@example.com \
+          --email azka.ghulam13@gmail.com \
           --password admin
         superset init
     restart: "no"
