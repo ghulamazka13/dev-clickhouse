@@ -38,7 +38,6 @@ CREATE TABLE IF NOT EXISTS control.datasource_to_dwh_pipelines (
   source_db_id int REFERENCES control.database_connections(id),
   target_db_id int REFERENCES control.database_connections(id),
   source_table_name text,
-  source_sql_query text,
   target_schema text,
   target_table_name text,
   target_table_schema jsonb
@@ -99,7 +98,6 @@ INSERT INTO control.datasource_to_dwh_pipelines (
   source_db_id,
   target_db_id,
   source_table_name,
-  source_sql_query,
   target_schema,
   target_table_name,
   target_table_schema
@@ -165,7 +163,6 @@ INSERT INTO control.datasource_to_dwh_pipelines (
   (SELECT id FROM control.database_connections WHERE db_conn_name = 'analytics_db'),
   (SELECT id FROM control.database_connections WHERE db_conn_name = 'analytics_db'),
   'bronze.security_events_raw',
-  NULL,
   'gold',
   'security_events_dwh',
   '[
@@ -209,7 +206,6 @@ ON CONFLICT (pipeline_id) DO UPDATE SET
   source_db_id = EXCLUDED.source_db_id,
   target_db_id = EXCLUDED.target_db_id,
   source_table_name = EXCLUDED.source_table_name,
-  source_sql_query = EXCLUDED.source_sql_query,
   target_schema = EXCLUDED.target_schema,
   target_table_name = EXCLUDED.target_table_name,
   target_table_schema = EXCLUDED.target_table_schema;

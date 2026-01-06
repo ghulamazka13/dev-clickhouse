@@ -250,7 +250,6 @@ Implement control tables (metadata source of truth):
   source_db_id (fk)
   target_db_id (fk)
   source_table_name text
-  source_sql_query text
   datasource_timestamp_column text
   target_schema text
   target_table_name text

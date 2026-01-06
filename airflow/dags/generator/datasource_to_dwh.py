@@ -1009,7 +1009,7 @@ def _fetch_pipelines(hook, dag_configs):
     rows = hook.get_records(
         """
         SELECT p.pipeline_id, p.id, p.dag_id, dc.dag_name, p.enabled, p.description,
-               p.source_table_name, p.source_sql_query, p.datasource_timestamp_column,
+               p.source_table_name, p.datasource_timestamp_column,
                p.target_schema, p.target_table_name, p.target_table_schema,
                p.datasource_table, p.datawarehouse_table,
                p.unique_key, p.merge_window_minutes, p.expected_columns,
@@ -1029,7 +1029,6 @@ def _fetch_pipelines(hook, dag_configs):
             enabled,
             description,
             source_table_name,
-            source_sql_query,
             datasource_timestamp_column,
             target_schema,
             target_table_name,
@@ -1068,7 +1067,6 @@ def _fetch_pipelines(hook, dag_configs):
                 "enabled": bool(enabled),
                 "description": description,
                 "source_table_name": source_table_name,
-                "source_sql_query": source_sql_query,
                 "datasource_table": datasource_table,
                 "datasource_timestamp_column": datasource_timestamp_column,
                 "target_schema": target_schema,
