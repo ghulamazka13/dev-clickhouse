@@ -69,7 +69,6 @@ Superset -> connects to Postgres as bi_reader -> only sees gold.*
     02_bronze_tables.sql              (bronze.security_events_raw)
     03_control_metadata.sql           (control.pipeline_definitions, control.dq_rules, etc.)
     04_monitoring_tables.sql          (monitoring.pipeline_runs, monitoring.lag_metrics, gold.dq_results, etc.)
-    05_seed_pipeline_definitions.sql  (insert metadata for security_events pipeline)
     06_dynamic_dag_metadata.sql     (control.database_connections, control.dag_configs, control.datasource_to_dwh_pipelines)
 
 /airflow/
@@ -79,16 +78,6 @@ Superset -> connects to Postgres as bi_reader -> only sees gold.*
     generator/metadata_generator.py (optional export of Redis payload to JSON)
     generator/datasource_to_dwh.py  (builds per-pipeline TaskGroup/DAG from metadata)
   include/
-    sql/
-      security_events/
-        silver.sql
-        gold_alerts_5m.sql
-        gold_alerts_1h.sql
-        gold_alerts_daily.sql
-        gold_top_talkers_daily.sql
-        gold_top_signatures_daily.sql
-        gold_protocol_mix_daily.sql
-        snapshot_gold.sql
     dq/
       soda_checks.yml
   plugins/ (optional)

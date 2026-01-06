@@ -553,10 +553,8 @@ def build_pipeline_taskgroup(pipeline, dag):
     silver_sql = load_sql(silver_sql_path)
     gold_sql_paths = pipeline.get("gold_sql_paths", [])
     gold_tables = pipeline.get("gold_tables", [])
-    snapshot_sql_path = pipeline.get(
-        "snapshot_sql_path", "/opt/airflow/include/sql/security_events/snapshot_gold.sql"
-    )
-    snapshot_sql = load_sql(snapshot_sql_path)
+    snapshot_sql_path = pipeline.get("snapshot_sql_path")
+    snapshot_sql = load_sql(snapshot_sql_path) if snapshot_sql_path else None
     expected_schema = pipeline.get("expected_schema")
     expected_columns = pipeline.get("expected_columns")
 
@@ -624,21 +622,6 @@ def build_pipeline_taskgroup(pipeline, dag):
             sql=optimize_sql,
         )
 
-        snapshot_id = PythonOperator(
-            task_id="snapshot_id",
-            python_callable=create_snapshot_id,
-        )
-
-        snapshot = PostgresOperator(
-            task_id="snapshot_gold",
-            postgres_conn_id="analytics_db",
-            sql=snapshot_sql,
-            params={
-                "pipeline_id": pipeline_id,
-                "snapshot_task_id": f"{taskgroup.group_id}.snapshot_id",
-            },
-        )
-
         alert_task = PythonOperator(
             task_id="alerting",
             python_callable=alerting,
@@ -668,8 +651,26 @@ def build_pipeline_taskgroup(pipeline, dag):
         else:
             build_silver >> dq_scan
 
-        dq_scan >> optimize >> snapshot_id >> snapshot
-        snapshot >> alert_task >> end_run
+        if snapshot_sql:
+            snapshot_id = PythonOperator(
+                task_id="snapshot_id",
+                python_callable=create_snapshot_id,
+            )
+
+            snapshot = PostgresOperator(
+                task_id="snapshot_gold",
+                postgres_conn_id="analytics_db",
+                sql=snapshot_sql,
+                params={
+                    "pipeline_id": pipeline_id,
+                    "snapshot_task_id": f"{taskgroup.group_id}.snapshot_id",
+                },
+            )
+
+            dq_scan >> optimize >> snapshot_id >> snapshot
+            snapshot >> alert_task >> end_run
+        else:
+            dq_scan >> optimize >> alert_task >> end_run
 
     return taskgroup
 
