@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS control.database_connections (
 );
 
 CREATE TABLE IF NOT EXISTS control.dag_configs (
-  dag_name text PRIMARY KEY,
+  id serial PRIMARY KEY,
+  dag_name text NOT NULL UNIQUE,
   enabled boolean NOT NULL DEFAULT true,
   schedule_cron text NOT NULL,
   timezone text NOT NULL DEFAULT 'Asia/Jakarta',
@@ -20,8 +21,9 @@ CREATE TABLE IF NOT EXISTS control.dag_configs (
 );
 
 CREATE TABLE IF NOT EXISTS control.datasource_to_dwh_pipelines (
-  pipeline_id text PRIMARY KEY,
-  dag_name text NOT NULL REFERENCES control.dag_configs(dag_name),
+  id serial PRIMARY KEY,
+  pipeline_id text NOT NULL UNIQUE,
+  dag_id int NOT NULL REFERENCES control.dag_configs(id),
   enabled boolean NOT NULL DEFAULT true,
   description text,
   datasource_table text,
@@ -82,7 +84,7 @@ ON CONFLICT (dag_name) DO UPDATE SET
 
 INSERT INTO control.datasource_to_dwh_pipelines (
   pipeline_id,
-  dag_name,
+  dag_id,
   enabled,
   description,
   datasource_table,
@@ -103,7 +105,7 @@ INSERT INTO control.datasource_to_dwh_pipelines (
   target_table_schema
 ) VALUES (
   'security_events',
-  'security_dwh',
+  (SELECT id FROM control.dag_configs WHERE dag_name = 'security_dwh'),
   true,
   'Security events bronze to gold datawarehouse',
   'bronze.security_events_raw',
@@ -170,7 +172,7 @@ INSERT INTO control.datasource_to_dwh_pipelines (
   ]'::jsonb
 )
 ON CONFLICT (pipeline_id) DO UPDATE SET
-  dag_name = EXCLUDED.dag_name,
+  dag_id = EXCLUDED.dag_id,
   enabled = EXCLUDED.enabled,
   description = EXCLUDED.description,
   datasource_table = EXCLUDED.datasource_table,

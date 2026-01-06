@@ -233,7 +233,8 @@ Implement control tables (metadata source of truth):
   gsm_path
 
 - control.dag_configs:
-  dag_name (pk)
+  id (pk)
+  dag_name (unique)
   enabled bool
   schedule_cron text
   timezone text
@@ -242,8 +243,9 @@ Implement control tables (metadata source of truth):
   max_active_tasks int
 
 - control.datasource_to_dwh_pipelines:
-  pipeline_id (pk)
-  dag_name (fk)
+  id (pk)
+  pipeline_id (unique)
+  dag_id (fk)
   enabled bool
   description text
   source_db_id (fk)

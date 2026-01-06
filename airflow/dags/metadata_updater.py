@@ -54,7 +54,7 @@ def _parse_json_value(value):
 def _fetch_dag_configs(hook):
     rows = hook.get_records(
         """
-        SELECT dag_name, enabled, schedule_cron, timezone, owner, tags, max_active_tasks
+        SELECT id, dag_name, enabled, schedule_cron, timezone, owner, tags, max_active_tasks
         FROM control.dag_configs
         WHERE enabled = true
         ORDER BY dag_name
@@ -62,8 +62,9 @@ def _fetch_dag_configs(hook):
     )
     dag_configs = {}
     for row in rows:
-        dag_name, enabled, schedule_cron, timezone, owner, tags, max_active_tasks = row
-        dag_configs[dag_name] = {
+        dag_id, dag_name, enabled, schedule_cron, timezone, owner, tags, max_active_tasks = row
+        dag_configs[dag_id] = {
+            "dag_id": dag_id,
             "dag_name": dag_name,
             "enabled": bool(enabled),
             "schedule_cron": schedule_cron,
@@ -104,20 +105,22 @@ def _normalize_pipeline_tables(
 def _fetch_pipelines(hook, dag_configs):
     rows = hook.get_records(
         """
-        SELECT pipeline_id, dag_name, enabled, description,
-               source_table_name, source_sql_query, datasource_timestamp_column,
-               target_schema, target_table_name, target_table_schema,
-               datasource_table, datawarehouse_table,
-               unique_key, merge_window_minutes, expected_columns,
-               sql_merge_path, freshness_threshold_minutes, sla_minutes
-        FROM control.datasource_to_dwh_pipelines
-        WHERE enabled = true
-        ORDER BY dag_name, pipeline_id
+        SELECT p.pipeline_id, p.dag_id, dc.dag_name, p.enabled, p.description,
+               p.source_table_name, p.source_sql_query, p.datasource_timestamp_column,
+               p.target_schema, p.target_table_name, p.target_table_schema,
+               p.datasource_table, p.datawarehouse_table,
+               p.unique_key, p.merge_window_minutes, p.expected_columns,
+               p.sql_merge_path, p.freshness_threshold_minutes, p.sla_minutes
+        FROM control.datasource_to_dwh_pipelines p
+        INNER JOIN control.dag_configs dc ON p.dag_id = dc.id
+        WHERE p.enabled = true
+        ORDER BY dc.dag_name, p.pipeline_id
         """
     )
     for row in rows:
         (
             pipeline_id,
+            dag_id,
             dag_name,
             enabled,
             description,
@@ -149,12 +152,13 @@ def _fetch_pipelines(hook, dag_configs):
             target_table_name,
             datawarehouse_table,
         )
-        dag_cfg = dag_configs.get(dag_name)
+        dag_cfg = dag_configs.get(dag_id)
         if not dag_cfg:
             continue
         dag_cfg["pipelines"].append(
             {
                 "pipeline_id": pipeline_id,
+                "dag_id": dag_id,
                 "enabled": bool(enabled),
                 "description": description,
                 "source_table_name": source_table_name,

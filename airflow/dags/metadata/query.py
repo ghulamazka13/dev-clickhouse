@@ -12,7 +12,7 @@ class MetadataQuery:
         self.dag_configs = """
         SELECT COALESCE(JSON_AGG(ROW_TO_JSON(d)), '[]'::json)
         FROM (
-            SELECT dag_name, enabled, schedule_cron, timezone, owner, tags, max_active_tasks
+            SELECT id, dag_name, enabled, schedule_cron, timezone, owner, tags, max_active_tasks
             FROM control.dag_configs
             WHERE enabled IS TRUE
             ORDER BY dag_name
@@ -29,8 +29,9 @@ class MetadataQuery:
         ),
         pipelines_base AS (
             SELECT
+                p.id AS pipeline_db_id,
                 p.pipeline_id,
-                p.dag_name,
+                p.dag_id,
                 p.enabled,
                 p.description,
                 p.datasource_table,
@@ -55,7 +56,8 @@ class MetadataQuery:
         pipelines AS (
             SELECT
                 pb.pipeline_id,
-                pb.dag_name,
+                pb.pipeline_db_id,
+                pb.dag_id,
                 pb.enabled,
                 pb.description,
                 pb.source_table_name,
@@ -82,6 +84,7 @@ class MetadataQuery:
         )
         SELECT COALESCE(JSON_AGG(ROW_TO_JSON(f)), '[]'::json) FROM (
             SELECT
+                dc.id AS dag_id,
                 dc.dag_name,
                 dc.enabled,
                 dc.schedule_cron,
@@ -91,9 +94,9 @@ class MetadataQuery:
                 dc.max_active_tasks,
                 JSON_AGG(p ORDER BY p.pipeline_id) AS pipelines
             FROM pipelines p
-            INNER JOIN control.dag_configs dc ON p.dag_name = dc.dag_name
+            INNER JOIN control.dag_configs dc ON p.dag_id = dc.id
             WHERE dc.enabled IS TRUE
-            GROUP BY 1,2,3,4,5,6,7
-            ORDER BY 1
+            GROUP BY 1,2,3,4,5,6,7,8
+            ORDER BY 2
         ) f
         """
