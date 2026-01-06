@@ -91,7 +91,10 @@ services:
   risingwave-init:
     image: postgres:16.3
     depends_on:
-      - risingwave
+      risingwave:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     volumes:
       - ./risingwave/init.sql:/init.sql:ro
     entrypoint:
@@ -101,6 +104,10 @@ services:
         set -e
         until pg_isready -h risingwave -p 4566 -U root; do
           echo "waiting for risingwave..."
+          sleep 3
+        done
+        until (echo > /dev/tcp/kafka/9092) >/dev/null 2>&1; do
+          echo "waiting for kafka..."
           sleep 3
         done
         psql -h risingwave -p 4566 -U root -d dev -f /init.sql
@@ -136,7 +143,7 @@ services:
       - _AIRFLOW_WWW_USER_FIRSTNAME=Admin
       - _AIRFLOW_WWW_USER_LASTNAME=User
       - _AIRFLOW_WWW_USER_EMAIL=azka.ghulam13@gmail.com
-      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core-postgres==3.4.0 redis==5.0.6
+      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core==3.4.0 soda-core-postgres==3.4.0 redis==5.0.6
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/include:/opt/airflow/include
@@ -177,7 +184,7 @@ services:
       - SODA_POSTGRES_DB=analytics
       - SODA_POSTGRES_USERNAME=etl_runner
       - SODA_POSTGRES_PASSWORD=etl_runner
-      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core-postgres==3.4.0 redis==5.0.6
+      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core==3.4.0 soda-core-postgres==3.4.0 redis==5.0.6
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/include:/opt/airflow/include
@@ -203,7 +210,7 @@ services:
       - SODA_POSTGRES_DB=analytics
       - SODA_POSTGRES_USERNAME=etl_runner
       - SODA_POSTGRES_PASSWORD=etl_runner
-      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core-postgres==3.4.0 redis==5.0.6
+      - PIP_EXTRA_REQUIREMENTS=apache-airflow-providers-postgres==5.11.0 soda-core==3.4.0 soda-core-postgres==3.4.0 redis==5.0.6
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/include:/opt/airflow/include

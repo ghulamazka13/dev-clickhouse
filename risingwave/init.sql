@@ -30,7 +30,7 @@ WITH (
   connector = 'kafka',
   topic = 'raw.security_events',
   properties.bootstrap.server = 'kafka:9092',
-  scan.startup.mode = 'earliest'
+  scan.startup.mode = 'latest'
 )
 FORMAT PLAIN ENCODE JSON;
 
