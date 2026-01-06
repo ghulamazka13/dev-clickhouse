@@ -78,7 +78,6 @@ Superset -> connects to Postgres as bi_reader -> only sees gold.*
     metadata_updater.py             (reads Postgres control.* metadata -> Redis)
     generator/metadata_generator.py (optional export of Redis payload to JSON)
     generator/datasource_to_dwh.py  (builds per-pipeline TaskGroup/DAG from metadata)
-    backfill_maintenance_dag.py     (manual/daily maintenance + backfill)
   include/
     sql/
       security_events/
@@ -290,8 +289,6 @@ C) generator/datasource_to_dwh.py standard TaskGroup steps (per pipeline)
 D) generator/metadata_generator.py (optional)
 - Export Redis payload to JSON under airflow/dags/generated for inspection.
 
-E) backfill_maintenance_dag.py (optional)
-- Manual trigger with params start_ts/end_ts and pipeline_id.
 
 Use Airflow connections/variables for:
 - Postgres etl_runner creds

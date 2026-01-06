@@ -84,10 +84,10 @@ Environment variables for producer/producer.py:
 Use scripts/smoke_test.sh (bash shell). On Windows, run via WSL or Git Bash.
 
 ## Backfill
-Trigger the backfill DAG with dag_run.conf:
+Trigger the pipeline DAG with dag_run.conf:
 
 ```bash
-docker compose exec -T airflow-webserver airflow dags trigger backfill_maintenance_dag -c '{"pipeline_id":"security_events","start_ts":"2026-01-01T00:00:00Z","end_ts":"2026-01-02T00:00:00Z"}'
+docker compose exec -T airflow-webserver airflow dags trigger security_dwh -c '{"pipeline_id":"security_events","start_ts":"2026-01-01T00:00:00Z","end_ts":"2026-01-02T00:00:00Z"}'
 ```
 
 ## Logstash future (Kafka output)

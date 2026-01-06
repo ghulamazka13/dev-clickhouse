@@ -12,7 +12,7 @@ from airflow import DAG
 from airflow.exceptions import AirflowException
 from airflow.models.param import Param
 from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.utils.dates import days_ago
@@ -215,6 +215,31 @@ def _get_manual_window(context):
     if start_ts and end_ts:
         return start_ts, end_ts
     return None, None
+
+
+def _normalize_pipeline_filter(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        return value or None
+    return None
+
+
+def should_run_pipeline(pipeline_id, **context):
+    params = context.get("params") or {}
+    dag_run = context.get("dag_run")
+    conf = dag_run.conf if dag_run and dag_run.conf else {}
+    requested = _normalize_pipeline_filter(
+        conf.get("pipeline_id") or params.get("pipeline_id")
+    )
+    if not requested:
+        return True
+    if requested == pipeline_id:
+        logging.info("Pipeline filter matched %s", pipeline_id)
+        return True
+    logging.info("Skipping pipeline %s due to filter %s", pipeline_id, requested)
+    return False
 
 def _require_qualified_name(value, field_name):
     if not isinstance(value, str) or not QUALIFIED_NAME_RE.match(value):
@@ -862,6 +887,12 @@ def build_datasource_to_dwh_taskgroup(pipeline, dag):
     freshness_threshold_minutes = pipeline.get("freshness_threshold_minutes", 2)
 
     with TaskGroup(group_id=f"{pipeline_id}_pipeline", dag=dag) as taskgroup:
+        gate = ShortCircuitOperator(
+            task_id="should_run",
+            python_callable=should_run_pipeline,
+            op_kwargs={"pipeline_id": pipeline_id},
+        )
+
         freshness_task = PythonOperator(
             task_id="freshness_check",
             python_callable=freshness_check,
@@ -916,12 +947,12 @@ def build_datasource_to_dwh_taskgroup(pipeline, dag):
                         sql=step["sql_text"],
                     )
                 )
-            freshness_task >> schema_task >> merge_task >> step_tasks[0]
+            gate >> freshness_task >> schema_task >> merge_task >> step_tasks[0]
             for upstream, downstream in zip(step_tasks, step_tasks[1:]):
                 upstream >> downstream
             step_tasks[-1] >> analyze_task
         else:
-            freshness_task >> schema_task >> merge_task >> analyze_task
+            gate >> freshness_task >> schema_task >> merge_task >> analyze_task
 
     return taskgroup
 
@@ -950,6 +981,7 @@ def build_datasource_to_dwh_dag(dag_cfg):
         max_active_tasks=max_active_tasks,
         tags=tags,
         params={
+            "pipeline_id": Param("", type="string"),
             "start_ts": Param("", type="string"),
             "end_ts": Param("", type="string"),
         },
