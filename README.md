@@ -3,7 +3,7 @@
 This repo is an end-to-end open source near real-time analytics POC using a Medallion architecture and metadata-driven Airflow.
 
 Dataflow
-- Dummy producer -> Kafka -> Kafka UI -> RisingWave -> Postgres bronze
+- Dummy producer -> Kafka -> Kafka UI -> RisingWave -> Postgres bronze (bronze.suricata_events_raw + bronze.wazuh_events_raw)
 - Airflow metadata-driven generator merges bronze -> gold datawarehouse tables (dedupe/upsert), plus monitoring and data quality
 - Superset reads gold only using bi_reader
 
@@ -39,6 +39,13 @@ If `security_dwh` doesn't appear immediately, wait for the scheduler to pick up 
 
 ```bash
 docker compose exec -T postgres psql -U postgres -d analytics
+```
+
+Example counts:
+
+```sql
+SELECT count(*) FROM bronze.suricata_events_raw;
+SELECT count(*) FROM bronze.wazuh_events_raw;
 ```
 
 ## Access control (Medallion + grants)
@@ -87,8 +94,10 @@ Use scripts/smoke_test.sh (bash shell). On Windows, run via WSL or Git Bash.
 Trigger the pipeline DAG with dag_run.conf:
 
 ```bash
-docker compose exec -T airflow-webserver airflow dags trigger security_dwh -c '{"pipeline_id":"security_events","start_ts":"2026-01-01T00:00:00Z","end_ts":"2026-01-02T00:00:00Z"}'
+docker compose exec -T airflow-webserver airflow dags trigger security_dwh -c '{"pipeline_id":"suricata_events","start_ts":"2026-01-01T00:00:00Z","end_ts":"2026-01-02T00:00:00Z"}'
 ```
+
+Use `pipeline_id` `wazuh_events` to backfill Wazuh data.
 
 ## Logstash future (Kafka output)
 To replace the dummy producer with Logstash later:

@@ -11,7 +11,8 @@ docker compose exec -T kafka /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-
 docker compose up -d producer
 
 echo "Bronze row count:"
-docker compose exec -T postgres psql -U postgres -d analytics -c "SELECT count(*) FROM bronze.security_events_raw;"
+docker compose exec -T postgres psql -U postgres -d analytics -c "SELECT count(*) FROM bronze.suricata_events_raw;"
+docker compose exec -T postgres psql -U postgres -d analytics -c "SELECT count(*) FROM bronze.wazuh_events_raw;"
 
 echo "Triggering Airflow metadata updater..."
 docker compose exec -T airflow-webserver airflow dags trigger metadata_updater
