@@ -57,7 +57,8 @@ SELECT
   category,
   alert_action,
   tags,
-  message
+  message,
+  NULL::jsonb AS raw_data
 FROM security_events_source;
 
 CREATE SINK IF NOT EXISTS security_events_sink

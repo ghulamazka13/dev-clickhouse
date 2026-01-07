@@ -93,10 +93,12 @@ services:
     depends_on:
       risingwave:
         condition: service_started
-      kafka:
-        condition: service_healthy
+    environment:
+      - RW_KAFKA_BOOTSTRAP=10.110.12.20:9092
+      - RW_STARTUP_DAYS=7
     volumes:
       - ./risingwave/init.sql:/init.sql:ro
+      - ./risingwave/init_dev.sql:/init_dev.sql:ro
     entrypoint:
       - /bin/bash
       - -c
@@ -106,11 +108,22 @@ services:
           echo "waiting for risingwave..."
           sleep 3
         done
-        until (echo > /dev/tcp/kafka/9092) >/dev/null 2>&1; do
-          echo "waiting for kafka..."
-          sleep 3
-        done
-        psql -h risingwave -p 4566 -U root -d dev -f /init.sql
+        if [ -n "$${RW_KAFKA_BOOTSTRAP:-}" ]; then
+          rw_host="$${RW_KAFKA_BOOTSTRAP%:*}"
+          rw_port="$${RW_KAFKA_BOOTSTRAP#*:}"
+          until (echo > /dev/tcp/$${rw_host}/$${rw_port}) >/dev/null 2>&1; do
+            echo "waiting for redpanda..."
+            sleep 3
+          done
+        fi
+        if [ -n "$${RW_STARTUP_TS:-}" ]; then
+          start_ts="$${RW_STARTUP_TS}"
+        else
+          days="$${RW_STARTUP_DAYS:-7}"
+          start_epoch=$$(( $$(date -u +%s) - (days * 86400) ))
+          start_ts="$$(date -u -d @$${start_epoch} +%Y-%m-%dT%H:%M:%SZ)"
+        fi
+        psql -h risingwave -p 4566 -U root -d dev -v start_ts="$${start_ts}" -f /init_dev.sql
     restart: "no"
 
   producer:
