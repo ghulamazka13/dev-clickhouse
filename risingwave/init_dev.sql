@@ -45,7 +45,7 @@ WITH (
   connector = 'kafka',
   topic = 'raw-security-logs',
   properties.bootstrap.server = '10.110.12.20:9092',
-  scan.startup.mode = 'earliest'
+  scan.startup.mode = 'latest'
 )
 FORMAT PLAIN ENCODE JSON;
 
@@ -145,8 +145,7 @@ FROM (
   FROM security_events_source
   WHERE suricata IS NOT NULL
     AND event->>'hash' IS NOT NULL
-) t
-WHERE t.event_ts >= :'start_ts'::timestamptz;
+) t;
 
 CREATE SINK IF NOT EXISTS suricata_events_sink
 FROM suricata_events_mv
@@ -231,8 +230,7 @@ FROM (
   FROM security_events_source
   WHERE event->>'provider' = 'wazuh'
     AND event->>'hash' IS NOT NULL
-) t
-WHERE t.event_ts >= :'start_ts'::timestamptz;
+) t;
 
 CREATE SINK IF NOT EXISTS wazuh_events_sink
 FROM wazuh_events_mv

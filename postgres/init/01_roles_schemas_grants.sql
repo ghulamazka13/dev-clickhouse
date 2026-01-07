@@ -10,6 +10,7 @@ GRANT CONNECT ON DATABASE analytics TO rw_writer, etl_runner, bi_reader;
 
 -- Schemas
 CREATE SCHEMA IF NOT EXISTS bronze;
+CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS silver;
 CREATE SCHEMA IF NOT EXISTS gold;
 CREATE SCHEMA IF NOT EXISTS control;
@@ -17,6 +18,7 @@ CREATE SCHEMA IF NOT EXISTS monitoring;
 
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 REVOKE ALL ON SCHEMA bronze FROM PUBLIC;
+REVOKE ALL ON SCHEMA staging FROM PUBLIC;
 REVOKE ALL ON SCHEMA silver FROM PUBLIC;
 REVOKE ALL ON SCHEMA gold FROM PUBLIC;
 REVOKE ALL ON SCHEMA control FROM PUBLIC;
@@ -24,6 +26,7 @@ REVOKE ALL ON SCHEMA monitoring FROM PUBLIC;
 
 -- Schema usage
 GRANT USAGE ON SCHEMA bronze TO rw_writer, etl_runner;
+GRANT USAGE ON SCHEMA staging TO rw_writer, etl_runner;
 GRANT USAGE ON SCHEMA silver TO etl_runner;
 GRANT USAGE ON SCHEMA gold TO etl_runner, bi_reader;
 GRANT USAGE ON SCHEMA control TO etl_runner;
@@ -36,6 +39,13 @@ GRANT CREATE ON SCHEMA monitoring TO etl_runner;
 -- Bronze: insert only for rw_writer
 GRANT INSERT ON ALL TABLES IN SCHEMA bronze TO rw_writer;
 ALTER DEFAULT PRIVILEGES IN SCHEMA bronze GRANT INSERT ON TABLES TO rw_writer;
+
+-- Staging: insert/select for rw_writer (backfill landing)
+GRANT INSERT ON ALL TABLES IN SCHEMA staging TO rw_writer;
+ALTER DEFAULT PRIVILEGES IN SCHEMA staging GRANT INSERT ON TABLES TO rw_writer;
+GRANT SELECT ON ALL TABLES IN SCHEMA staging TO rw_writer, etl_runner;
+ALTER DEFAULT PRIVILEGES IN SCHEMA staging GRANT SELECT ON TABLES TO rw_writer;
+ALTER DEFAULT PRIVILEGES IN SCHEMA staging GRANT SELECT ON TABLES TO etl_runner;
 
 -- Bronze: read for etl_runner
 GRANT SELECT ON ALL TABLES IN SCHEMA bronze TO etl_runner;

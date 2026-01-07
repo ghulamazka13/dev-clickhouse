@@ -2,6 +2,6 @@ data_source analytics:
   type: postgres
   host: ${SODA_POSTGRES_HOST}
   port: ${SODA_POSTGRES_PORT}
+  database: ${SODA_POSTGRES_DB}
   username: ${SODA_POSTGRES_USERNAME}
   password: ${SODA_POSTGRES_PASSWORD}
-  database: ${SODA_POSTGRES_DB}

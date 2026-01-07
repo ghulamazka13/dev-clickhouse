@@ -1,7 +1,9 @@
-checks for silver.security_events:
-  - row_count >= 1
+checks for gold.suricata_events_dwh:
+  - missing_count(event_id) = 0
   - missing_count(event_ts) = 0
   - duplicate_count(event_id) = 0
-  - failed rows:
-      name: severity_allowed
-      fail condition: severity not in ('low','medium','high')
+
+checks for gold.wazuh_events_dwh:
+  - missing_count(event_id) = 0
+  - missing_count(event_ts) = 0
+  - duplicate_count(event_id) = 0

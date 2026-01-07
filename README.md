@@ -3,7 +3,7 @@
 This repo is an end-to-end open source near real-time analytics POC using a Medallion architecture and metadata-driven Airflow.
 
 Dataflow
-- Dummy producer -> Kafka -> Kafka UI -> RisingWave -> Postgres bronze (bronze.suricata_events_raw + bronze.wazuh_events_raw)
+- Redpanda (remote) -> RisingWave -> Postgres bronze (bronze.suricata_events_raw + bronze.wazuh_events_raw)
 - Airflow metadata-driven generator merges bronze -> gold datawarehouse tables (dedupe/upsert), plus monitoring and data quality
 - Superset reads gold only using bi_reader
 
@@ -22,7 +22,6 @@ docker compose ps
 ```
 
 3) Open UIs
-- Kafka UI: http://localhost:18080
 - Airflow: http://localhost:8088 (admin/admin)
 - Superset: http://localhost:8089 (admin/admin)
 
@@ -78,14 +77,10 @@ CREATE EXTENSION IF NOT EXISTS pg_duckdb;
 ## Superset
 Use the bi_reader account so only gold schema is visible. See superset/bootstrap/README_superset.md.
 
-## Producer configuration
-Environment variables for producer/producer.py:
-- EVENTS_PER_SEC (default 10)
-- MIX_ZEEK_PERCENT (default 60)
-- MIX_SURICATA_PERCENT (default 40)
-- SEED (default 42)
-- KAFKA_BROKERS (default kafka:9092)
-- KAFKA_TOPIC (default raw.security_events)
+## Redpanda source
+This stack expects a remote Redpanda/Kafka-compatible broker:
+- bootstrap: `10.110.12.20:9092`
+- topic: `raw-security-logs`
 
 ## Smoke test
 Use scripts/smoke_test.sh (bash shell). On Windows, run via WSL or Git Bash.
@@ -99,14 +94,45 @@ docker compose exec -T airflow-webserver airflow dags trigger security_dwh -c '{
 
 Use `pipeline_id` `wazuh_events` to backfill Wazuh data.
 
+## RisingWave backfill (no downtime)
+The live RisingWave pipeline can stay on `scan.startup.mode = 'latest'`. Backfill uses a separate pipeline that writes to staging tables, then merges into bronze.
+
+If the Postgres container already exists, apply the staging tables once:
+
+```bash
+docker compose exec -T postgres psql -U postgres -d analytics -f postgres/init/02_staging_tables.sql
+```
+
+1) Run backfill (defaults to last 7 days):
+
+```bash
+docker compose --profile backfill run --rm risingwave-backfill
+```
+
+Optional overrides:
+- RW_KAFKA_BOOTSTRAP (default 10.110.12.20:9092)
+- RW_BACKFILL_TOPIC (default raw-security-logs)
+- RW_BACKFILL_DAYS (default 7)
+- RW_BACKFILL_START_TS / RW_BACKFILL_END_TS (ISO8601 UTC)
+
+2) Merge staging -> bronze using the same time window:
+
+```bash
+docker compose exec -T postgres psql -U postgres -d analytics -v start_ts="2026-01-01T00:00:00Z" -v end_ts="2026-01-08T00:00:00Z" -f scripts/backfill_merge.sql
+```
+
+3) Optional cleanup:
+- Truncate staging tables in `staging.*`.
+- Drop backfill objects in RisingWave using `risingwave/backfill_cleanup.sql`.
+
 ## Logstash future (Kafka output)
-To replace the dummy producer with Logstash later:
+To send data into Redpanda:
 
 ```conf
 output {
   kafka {
-    bootstrap_servers => "kafka:9092"
-    topic_id => "raw.security_events"
+    bootstrap_servers => "10.110.12.20:9092"
+    topic_id => "raw-security-logs"
     codec => json
   }
 }

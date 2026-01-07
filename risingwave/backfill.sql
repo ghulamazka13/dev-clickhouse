@@ -1,14 +1,12 @@
-DROP SINK IF EXISTS security_events_sink;
-DROP SINK IF EXISTS suricata_events_sink;
-DROP SINK IF EXISTS wazuh_events_sink;
-DROP MATERIALIZED VIEW IF EXISTS security_events_mv;
-DROP MATERIALIZED VIEW IF EXISTS suricata_events;
-DROP MATERIALIZED VIEW IF EXISTS zeek_events;
-DROP MATERIALIZED VIEW IF EXISTS suricata_events_mv;
-DROP MATERIALIZED VIEW IF EXISTS wazuh_events_mv;
-DROP SOURCE IF EXISTS security_events_source;
+-- Backfill pipeline (no downtime). Requires psql vars: start_ts, end_ts, topic, bootstrap_server.
 
-CREATE SOURCE IF NOT EXISTS security_events_source (
+DROP SINK IF EXISTS suricata_backfill_sink;
+DROP SINK IF EXISTS wazuh_backfill_sink;
+DROP MATERIALIZED VIEW IF EXISTS suricata_backfill_mv;
+DROP MATERIALIZED VIEW IF EXISTS wazuh_backfill_mv;
+DROP SOURCE IF EXISTS security_events_backfill_source;
+
+CREATE SOURCE IF NOT EXISTS security_events_backfill_source (
   event jsonb,
   suricata jsonb,
   zeek jsonb,
@@ -40,13 +38,13 @@ CREATE SOURCE IF NOT EXISTS security_events_source (
 )
 WITH (
   connector = 'kafka',
-  topic = 'raw.security_events',
-  properties.bootstrap.server = 'kafka:9092',
-  scan.startup.mode = 'latest'
+  topic = :'topic',
+  properties.bootstrap.server = :'bootstrap_server',
+  scan.startup.mode = 'earliest'
 )
 FORMAT PLAIN ENCODE JSON;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS suricata_events_mv AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS suricata_backfill_mv AS
 SELECT
   event_id,
   event_ts,
@@ -139,22 +137,24 @@ FROM (
       'length', length,
       'message', message
     ) AS raw_data
-  FROM security_events_source
+  FROM security_events_backfill_source
   WHERE suricata IS NOT NULL
     AND event->>'hash' IS NOT NULL
-) t;
+) t
+WHERE t.event_ts >= :'start_ts'::timestamptz
+  AND t.event_ts < :'end_ts'::timestamptz;
 
-CREATE SINK IF NOT EXISTS suricata_events_sink
-FROM suricata_events_mv
+CREATE SINK IF NOT EXISTS suricata_backfill_sink
+FROM suricata_backfill_mv
 WITH (
   connector = 'jdbc',
   jdbc.url = 'jdbc:postgresql://postgres:5432/analytics?user=rw_writer&password=rw_writer',
-  schema.name = 'bronze',
-  table.name = 'suricata_events_raw',
+  schema.name = 'staging',
+  table.name = 'suricata_events_backfill',
   type = 'append-only'
 );
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS wazuh_events_mv AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS wazuh_backfill_mv AS
 SELECT
   event_id,
   event_ts,
@@ -224,17 +224,19 @@ FROM (
       'length', length,
       'message', message
     ) AS raw_data
-  FROM security_events_source
+  FROM security_events_backfill_source
   WHERE event->>'provider' = 'wazuh'
     AND event->>'hash' IS NOT NULL
-) t;
+) t
+WHERE t.event_ts >= :'start_ts'::timestamptz
+  AND t.event_ts < :'end_ts'::timestamptz;
 
-CREATE SINK IF NOT EXISTS wazuh_events_sink
-FROM wazuh_events_mv
+CREATE SINK IF NOT EXISTS wazuh_backfill_sink
+FROM wazuh_backfill_mv
 WITH (
   connector = 'jdbc',
   jdbc.url = 'jdbc:postgresql://postgres:5432/analytics?user=rw_writer&password=rw_writer',
-  schema.name = 'bronze',
-  table.name = 'wazuh_events_raw',
+  schema.name = 'staging',
+  table.name = 'wazuh_events_backfill',
   type = 'append-only'
 );
