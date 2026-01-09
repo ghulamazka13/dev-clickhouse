@@ -105,6 +105,11 @@ docker compose exec -T postgres psql -U postgres -d analytics -f postgres/init/0
 
 1) Run backfill (defaults to last 7 days):
 
+  $env:RW_BACKFILL_START_TS="2026-01-07T00:00:00Z"                                                               
+  $env:RW_BACKFILL_END_TS="2026-01-08T00:00:00Z"                                                                 
+ docker compose --profile backfill run --rm risingwave-backfill                                                    
+  Remove-Item Env:\RW_BACKFILL_START_TS, Env:\RW_BACKFILL_END_TS    
+
 ```bash
 docker compose --profile backfill run --rm risingwave-backfill
 ```
@@ -116,6 +121,11 @@ Optional overrides:
 - RW_BACKFILL_START_TS / RW_BACKFILL_END_TS (ISO8601 UTC)
 
 2) Merge staging -> bronze using the same time window:
+
+ docker compose cp scripts/backfill_merge.sql postgres:/tmp/backfill_merge.sql   
+
+docker compose exec -T postgres psql -U postgres -d analytics -v start_ts="1970
+-01-01T00:00:00Z" -v end_ts="2100-01-01T00:00:00Z" -f /tmp/backfill_merge.sql
 
 ```bash
 docker compose exec -T postgres psql -U postgres -d analytics -v start_ts="2026-01-01T00:00:00Z" -v end_ts="2026-01-08T00:00:00Z" -f scripts/backfill_merge.sql
