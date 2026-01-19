@@ -24,6 +24,11 @@ docker compose ps
 3) Open UIs
 - Airflow: http://localhost:8088 (admin/admin)
 - Superset: http://localhost:8089 (admin/admin)
+- RisingWave dashboard: http://localhost:5691
+- SeaweedFS master UI: http://localhost:19333
+- SeaweedFS filer UI: http://localhost:8888
+- SeaweedFS volume UI: http://localhost:9333
+- Prometheus: http://localhost:9090
 
 4) Trigger the pipeline (optional)
 
@@ -77,6 +82,13 @@ CREATE EXTENSION IF NOT EXISTS pg_duckdb;
 
 ## Superset
 Use the bi_reader account so only gold schema is visible. See superset/bootstrap/README_superset.md.
+
+## RisingWave state store (SeaweedFS)
+RisingWave runs as a persistent cluster and stores state/metadata in SeaweedFS via the S3 gateway.
+- S3 endpoint: http://localhost:8333
+- Credentials: access key `rwadmin`, secret key `rwadmin`
+- Uses path-style S3 addressing (no virtual-hosted bucket names)
+- Data is persisted in Docker volumes; deleting volumes will reset metadata/state
 
 ## Redpanda source
 This stack expects a remote Redpanda/Kafka-compatible broker:
@@ -154,5 +166,6 @@ Downstream remains unchanged.
 
 ## Troubleshooting
 - If RisingWave init fails, rerun: docker compose run --rm risingwave-init
+- If RisingWave meta fails with S3/DNS errors, check seaweed-s3 logs and path-style S3 config
 - If Airflow DAGs are missing, wait for the scheduler to parse or restart airflow-scheduler
 - If Superset is empty, add the Postgres database using bi_reader and create datasets from gold schema
