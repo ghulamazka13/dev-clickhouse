@@ -6,6 +6,7 @@ Requirements
 - Note that all gold fact tables are range-partitioned by event_ts (daily).
 - Show bronze raw tables: bronze.wazuh_events_raw, bronze.suricata_events_raw, bronze.zeek_events_raw.
 - Show Airflow as the ETL orchestrator between bronze and gold.
+- Show ClickHouse as the storage layer for bronze and gold.
 - Show gold fact tables: gold.fact_wazuh_events, gold.fact_suricata_events, gold.fact_zeek_events.
 - Show gold dimensions: gold.dim_date, gold.dim_time, gold.dim_host, gold.dim_tag, gold.dim_agent, gold.dim_rule, gold.dim_event, gold.dim_sensor, gold.dim_signature, gold.dim_protocol.
 - Show gold bridge tables: gold.bridge_wazuh_event_tag, gold.bridge_suricata_event_tag, gold.bridge_zeek_event_tag.

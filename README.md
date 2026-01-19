@@ -1,11 +1,11 @@
 # Near Real-Time Security Analytics POC
 
-This repo is an end-to-end open source near real-time analytics POC using a Medallion architecture and metadata-driven Airflow.
+This repo is an end-to-end near real-time analytics POC using a Medallion architecture with ClickHouse storage and Airflow batch transforms.
 
 Dataflow
-- Redpanda (remote) -> RisingWave -> Postgres bronze (bronze.suricata_events_raw + bronze.wazuh_events_raw + bronze.zeek_events_raw)
-- Airflow metadata-driven generator merges bronze -> gold datawarehouse tables (dedupe/upsert), plus monitoring and data quality
-- Superset reads gold only using bi_reader
+- Redpanda (remote) -> ClickHouse Kafka Engine -> bronze.* (raw)
+- Airflow runs ClickHouse SQL to build the gold star schema (dims/facts/bridges)
+- Superset reads gold only
 
 ## Quickstart
 
@@ -24,149 +24,110 @@ docker compose ps
 3) Open UIs
 - Airflow: http://localhost:8088 (admin/admin)
 - Superset: http://localhost:8089 (admin/admin)
-- RisingWave dashboard: http://localhost:5691
-- SeaweedFS master UI: http://localhost:19333
-- SeaweedFS filer UI: http://localhost:8888
-- SeaweedFS volume UI: http://localhost:9333
-- Prometheus: http://localhost:9090
+- ClickHouse HTTP: http://localhost:8123
 
-4) Trigger the pipeline (optional)
+4) Trigger the gold pipeline (optional)
 
 ```bash
-docker compose exec -T airflow-webserver airflow dags trigger metadata_updater
-docker compose exec -T airflow-webserver airflow dags trigger security_dwh
+docker compose exec -T airflow-webserver airflow dags trigger gold_star_schema
 ```
 
-If `security_dwh` doesn't appear immediately, wait for the scheduler to pick up the new dynamic DAG.
-
-5) Check data in Postgres
+5) Check data in ClickHouse
 
 ```bash
-docker compose exec -T postgres psql -U postgres -d analytics
+docker compose exec -T clickhouse clickhouse-client \
+  --user etl_runner --password etl_runner \
+  --query "SELECT count() FROM bronze.suricata_events_raw;"
 ```
 
-Example counts:
+## Access control
+ClickHouse RBAC is enabled on init.
+- etl_runner: read/write bronze + gold
+- superset: read-only on gold
+
+Default credentials:
+- ClickHouse admin: admin/admin
+- etl_runner: etl_runner/etl_runner
+- superset: superset/superset
+
+Roles/users are defined in `clickhouse/init/00_databases.sql`.
+
+## ClickHouse ingestion (Kafka Engine)
+- Kafka table: `bronze.security_events_kafka`
+- Materialized Views: `bronze.suricata_events_mv`, `bronze.wazuh_events_mv`, `bronze.zeek_events_mv`
+- Broker: `10.110.12.20:9092`
+- Topic: `malcolm-logs`
+
+## Airflow gold pipeline
+- DAG: `gold_star_schema`
+- Metadata source-of-truth: Postgres tables `metadata.gold_dags` + `metadata.gold_pipelines`
+- Metadata updater DAG: `metadata_updater` (exports a YAML snapshot to `airflow/dags/gold_pipelines.yml`)
+- SQL templates: `airflow/dags/sql/*.sql` (one pipeline per file)
+- Default window: 10 minutes (override with `dag_run.conf` `start_ts`/`end_ts` or `window_minutes`)
+
+To add a new gold pipeline:
+1) Insert a row in `metadata.gold_pipelines` with `pipeline_id`, `sql_path`, and `target_table`
+2) Create the SQL template under `airflow/dags/sql/` using `{{ start_ts }}`, `{{ end_ts }}`, and `{{ params.* }}`
+3) Trigger `metadata_updater` (optional) to regenerate the YAML snapshot
+
+Example backfill run:
+
+```bash
+docker compose exec -T airflow-webserver airflow dags trigger gold_star_schema \
+  -c '{"start_ts":"2026-01-01T00:00:00Z","end_ts":"2026-01-02T00:00:00Z"}'
+```
+
+Run a single pipeline:
+
+```bash
+docker compose exec -T airflow-webserver airflow dags trigger gold_star_schema \
+  -c '{"pipeline_id":"fact_wazuh_events","start_ts":"2026-01-01T00:00:00Z","end_ts":"2026-01-02T00:00:00Z"}'
+```
+
+## Metadata store (Postgres)
+Metadata schema and seed data live in `postgres/init/10_metadata.sql`.
+If the Postgres volume already exists, apply the SQL manually:
+
+```bash
+docker compose exec -T postgres psql -U airflow -d airflow -f /docker-entrypoint-initdb.d/10_metadata.sql
+```
+
+Example insert for a new pipeline:
 
 ```sql
-SELECT count(*) FROM bronze.suricata_events_raw;
-SELECT count(*) FROM bronze.wazuh_events_raw;
-SELECT count(*) FROM bronze.zeek_events_raw;
+INSERT INTO metadata.gold_pipelines (
+  dag_id,
+  pipeline_id,
+  enabled,
+  sql_path,
+  window_minutes,
+  depends_on,
+  target_table,
+  pipeline_order
+) VALUES (
+  'gold_star_schema',
+  'fact_new_events',
+  TRUE,
+  'sql/fact_new_events.sql',
+  10,
+  ARRAY['dim_date', 'dim_time'],
+  'gold.fact_new_events',
+  20
+);
 ```
-
-## Access control (Medallion + grants)
-- bronze: raw, restricted
-- silver: cleaned, restricted
-- gold: business, BI readable
-- control: metadata
-- monitoring: pipeline metrics
-
-Roles
-- rw_writer: insert only to bronze
-- etl_runner: select bronze, DML silver/gold/monitoring
-- bi_reader: select only on gold (Superset must use this)
-
-## pg_duckdb
-The Postgres image includes pg_duckdb. It is enabled on init:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS pg_duckdb;
-```
-
-## Airflow metadata-driven pipelines
-- Control tables live in control.*
-- metadata_updater uses metadata/query.py (MetadataQuery.datasource_to_dwh) to read control.database_connections, control.dag_configs, and control.datasource_to_dwh_pipelines, then writes a payload to Redis
-- main.py loads metadata from Postgres (with Redis fallback) and builds dynamic DAGs via generator/datasource_to_dwh.py
-- Update pipeline configs by editing control.* metadata in Postgres (source_table_name, target_schema, target_table_schema)
-- control.datasource_to_dwh_pipelines.merge_sql_text stores the merge SQL (required; supports placeholders like {{DATAWAREHOUSE_TABLE}}, {{TIME_FILTER}}, {{MERGE_UPDATE_SET}}, {{SOURCE_COLUMN_LIST}})
-- Optional: scripts/metadata-generator/main.py exports the Redis payload to JSON under airflow/dags/generated
 
 ## Superset
-Use the bi_reader account so only gold schema is visible. See superset/bootstrap/README_superset.md.
+Use the ClickHouse connector:
 
-## RisingWave state store (SeaweedFS)
-RisingWave runs as a persistent cluster and stores state/metadata in SeaweedFS via the S3 gateway.
-- S3 endpoint: http://localhost:8333
-- Credentials: access key `rwadmin`, secret key `rwadmin`
-- Uses path-style S3 addressing (no virtual-hosted bucket names)
-- Data is persisted in Docker volumes; deleting volumes will reset metadata/state
-
-## Redpanda source
-This stack expects a remote Redpanda/Kafka-compatible broker:
-- bootstrap: `10.110.12.20:9092`
-- topic: `malcolm-logs`
-
-## Smoke test
-Use scripts/smoke_test.sh (bash shell). On Windows, run via WSL or Git Bash.
-
-## Backfill
-Trigger the pipeline DAG with dag_run.conf:
-
-```bash
-docker compose exec -T airflow-webserver airflow dags trigger security_dwh -c '{"pipeline_id":"suricata_events","start_ts":"2026-01-01T00:00:00Z","end_ts":"2026-01-02T00:00:00Z"}'
+```
+clickhouse+connect://superset:superset@clickhouse:8123/default
 ```
 
-Use `pipeline_id` `wazuh_events` to backfill Wazuh data.
-Use `pipeline_id` `zeek_events` to backfill Zeek data.
+Add datasets from the gold schema (facts + dims).
 
-## RisingWave backfill (no downtime)
-The live RisingWave pipeline can stay on `scan.startup.mode = 'latest'`. Backfill uses a separate pipeline that writes to staging tables, then merges into bronze.
-
-If the Postgres container already exists, apply the staging tables once:
-
-```bash
-docker compose exec -T postgres psql -U postgres -d analytics -f postgres/init/02_staging_tables.sql
-```
-
-1) Run backfill (defaults to last 7 days):
-
-  $env:RW_BACKFILL_START_TS="2026-01-07T00:00:00Z"                                                               
-  $env:RW_BACKFILL_END_TS="2026-01-08T00:00:00Z"                                                                 
- docker compose --profile backfill run --rm risingwave-backfill                                                    
-  Remove-Item Env:\RW_BACKFILL_START_TS, Env:\RW_BACKFILL_END_TS    
-
-```bash
-docker compose --profile backfill run --rm risingwave-backfill
-```
-
-Optional overrides:
-- RW_KAFKA_BOOTSTRAP (default 10.110.12.20:9092)
-- RW_BACKFILL_TOPIC (default malcolm-logs)
-- RW_BACKFILL_DAYS (default 7)
-- RW_BACKFILL_START_TS / RW_BACKFILL_END_TS (ISO8601 UTC)
-
-2) Merge staging -> bronze using the same time window:
-
- docker compose cp scripts/backfill_merge.sql postgres:/tmp/backfill_merge.sql   
-
-docker compose exec -T postgres psql -U postgres -d analytics -v start_ts="1970
--01-01T00:00:00Z" -v end_ts="2100-01-01T00:00:00Z" -f /tmp/backfill_merge.sql
-
-```bash
-docker compose exec -T postgres psql -U postgres -d analytics -v start_ts="2026-01-01T00:00:00Z" -v end_ts="2026-01-08T00:00:00Z" -f scripts/backfill_merge.sql
-```
-
-3) Optional cleanup:
-- Truncate staging tables in `staging.*`.
-- Drop backfill objects in RisingWave using `risingwave/backfill_cleanup.sql`.
-
-## Logstash future (Kafka output)
-To send data into Redpanda:
-
-```conf
-output {
-  kafka {
-    bootstrap_servers => "10.110.12.20:9092"
-    topic_id => "malcolm-logs"
-    codec => json
-  }
-}
-```
-
-Downstream remains unchanged.
+## Optional one-time backfill (from Postgres)
+If you have historical data in Postgres, run a one-time import into ClickHouse using the `postgresql` table function or CSV streaming. See `scripts/clickhouse_examples.sql` for query examples and adapt the import to your source.
 
 ## Troubleshooting
-- If RisingWave init fails, rerun: docker compose run --rm risingwave-init
-- If RisingWave meta fails with S3/DNS errors, check seaweed-s3 logs and path-style S3 config
-- If Airflow DAGs are missing, wait for the scheduler to parse or restart airflow-scheduler
-- If Superset is empty, add the Postgres database using bi_reader and create datasets from gold schema
-"# dev-clickhouse" 
+- If Kafka ingestion is empty, verify the broker `10.110.12.20:9092` is reachable from the ClickHouse container.
+- If gold DAG fails, check Airflow logs and ClickHouse permissions for `etl_runner`.

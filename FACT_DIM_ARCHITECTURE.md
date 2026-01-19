@@ -3,9 +3,10 @@
 Scope
 - Source data: bronze.wazuh_events_raw, bronze.suricata_events_raw, bronze.zeek_events_raw
 - Target: gold star schema for analytics, BI, and monitoring
+- Storage: ClickHouse (bronze and gold)
 - Fact and dimension tables live in the gold schema; bronze tables remain raw
 - ETL: Airflow DAGs load bronze -> gold dimensions, facts, and bridges
-- Volume: ~300k events/15 min; partition fact tables by event_ts (daily) for pruning and retention
+- Volume: ~300k events/15 min; partition fact tables by toDate(event_ts) for pruning and retention
 - Grain: one row per event_id in each fact table
 
 Design principles
@@ -142,8 +143,8 @@ Table connections (gold)
   - bridge tag_key -> gold.dim_tag.tag_key
 
 Key and partitioning notes
-- Fact tables are range-partitioned by event_ts (daily) at current volumes
-- Chosen approach: composite key (event_id, event_ts) on facts; bridge tables carry event_ts
+- Fact tables are MergeTree-partitioned by toDate(event_ts)
+- Chosen approach: order by (event_id, event_ts) on facts; bridge tables carry event_ts
 - Keep ETL time-windowed to target only the active partitions
 
 Load strategy
@@ -153,11 +154,10 @@ Load strategy
 3) Load facts and compute lag_seconds and duration_seconds
 4) Load tag bridges
 
-Partitioning and indexes
-- Partition facts by event_ts (daily) to enable pruning and retention
-- Create per-partition indexes on event_ts and FK keys (rule_key, agent_key, host_key, signature_key, protocol_key, sensor_key)
-- Index (event_id, event_ts) on facts and bridge tables; also index tag_key on bridges
-- Pre-create future partitions and drop old partitions for retention
+Partitioning and ordering
+- Partition facts by toDate(event_ts) to enable pruning and retention
+- Order by (event_id, event_ts) on facts and (event_id, event_ts, tag_key) on bridges
+- Use ReplacingMergeTree for facts/bridges to dedupe by (event_id, event_ts)
 
 Optional enrichments
 - dim_ip + GeoIP attributes
@@ -167,4 +167,3 @@ Optional enrichments
 Notes
 - Keep bronze raw tables unchanged for audit and replay.
 - Airflow DAGs handle bronze -> gold loads for facts, dims, and tag bridges.
-- If you already maintain wide gold tables (gold.wazuh_events_dwh, gold.suricata_events_dwh, gold.zeek_events_dwh), you can feed dims/facts from them.
