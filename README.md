@@ -25,6 +25,7 @@ docker compose ps
 - Airflow: http://localhost:8088 (admin/admin)
 - Superset: http://localhost:8089 (admin/admin)
 - ClickHouse HTTP: http://localhost:8123
+- CHouse UI: http://localhost:8087
 
 4) Trigger the gold pipeline (optional)
 

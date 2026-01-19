@@ -32,6 +32,22 @@ services:
       - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
 
+  chouse:
+    image: ghcr.io/chouseio/chouse:latest
+    ports:
+      - "8087:8000"
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=8123
+      - CLICKHOUSE_USER=admin
+      - CLICKHOUSE_PASSWORD=admin
+      - CLICKHOUSE_DATABASE=default
+    volumes:
+      - chouse_data:/data
+    depends_on:
+      - clickhouse
+    restart: unless-stopped
+
   airflow-init:
     image: apache/airflow:2.9.2-python3.11
     depends_on:
@@ -165,4 +181,5 @@ services:
 volumes:
   postgres_data:
   clickhouse_data:
+  chouse_data:
   superset_data:
