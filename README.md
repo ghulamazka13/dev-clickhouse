@@ -169,3 +169,4 @@ Downstream remains unchanged.
 - If RisingWave meta fails with S3/DNS errors, check seaweed-s3 logs and path-style S3 config
 - If Airflow DAGs are missing, wait for the scheduler to parse or restart airflow-scheduler
 - If Superset is empty, add the Postgres database using bi_reader and create datasets from gold schema
+"# dev-clickhouse" 
