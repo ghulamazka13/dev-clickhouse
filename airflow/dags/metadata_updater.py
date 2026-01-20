@@ -70,7 +70,11 @@ def _resolve_output_path() -> str:
 
 def refresh_metadata_cache() -> None:
     generator = GoldPipelineGenerator()
-    dag_id = os.environ.get("GOLD_METADATA_DAG_ID", "gold_star_schema")
+    dag_id = (
+        os.environ.get("GOLD_METADATA_DAG_NAME")
+        or os.environ.get("GOLD_METADATA_DAG_ID")
+        or ""
+    )
     configs = generator.load_configs_from_postgres()
     if not configs:
         raise ValueError("No metadata configs loaded from Postgres")

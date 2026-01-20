@@ -169,7 +169,7 @@ class GoldPipelineGenerator:
         dag_sql = text(
             """
             SELECT
-              dag_id,
+              dag_name,
               schedule_cron,
               timezone,
               owner,
@@ -183,17 +183,19 @@ class GoldPipelineGenerator:
         pipeline_sql = text(
             """
             SELECT
-              dag_id,
-              pipeline_id,
-              enabled,
-              sql_path,
-              window_minutes,
-              depends_on,
-              target_table,
-              params,
-              pipeline_order
-            FROM metadata.gold_pipelines
-            ORDER BY dag_id, pipeline_order, pipeline_id
+              d.dag_name,
+              p.pipeline_name,
+              p.enabled,
+              p.sql_path,
+              p.window_minutes,
+              p.depends_on,
+              p.target_table,
+              p.params,
+              p.pipeline_order
+            FROM metadata.gold_pipelines p
+            JOIN metadata.gold_dags d
+              ON d.id = p.dag_id
+            ORDER BY d.id, p.pipeline_order, p.pipeline_name
             """
         )
 
@@ -212,12 +214,12 @@ class GoldPipelineGenerator:
         dag_map: Dict[str, Dict[str, Any]] = {}
 
         for row in dag_rows:
-            dag_id = row.get("dag_id")
-            if not dag_id:
+            dag_name = row.get("dag_name")
+            if not dag_name:
                 continue
             tags = _normalize_list(row.get("tags"))
-            dag_map[dag_id] = {
-                "dag_id": dag_id,
+            dag_map[dag_name] = {
+                "dag_id": dag_name,
                 "schedule_cron": row.get("schedule_cron") or "*/5 * * * *",
                 "timezone": row.get("timezone") or "Asia/Jakarta",
                 "owner": row.get("owner") or "data-eng",
@@ -230,11 +232,11 @@ class GoldPipelineGenerator:
             }
 
         for row in pipeline_rows:
-            dag_id = row.get("dag_id")
-            if not dag_id or dag_id not in dag_map:
+            dag_name = row.get("dag_name")
+            if not dag_name or dag_name not in dag_map:
                 continue
-            pipeline_id = row.get("pipeline_id")
-            if not pipeline_id:
+            pipeline_name = row.get("pipeline_name")
+            if not pipeline_name:
                 continue
             params = row.get("params") or {}
             if not isinstance(params, dict):
@@ -245,7 +247,7 @@ class GoldPipelineGenerator:
                 params.setdefault("target_table", target_table)
 
             pipeline: Dict[str, Any] = {
-                "pipeline_id": pipeline_id,
+                "pipeline_id": pipeline_name,
                 "enabled": row.get("enabled", True),
                 "sql_path": row.get("sql_path"),
                 "depends_on": _normalize_list(row.get("depends_on")),
@@ -255,7 +257,7 @@ class GoldPipelineGenerator:
             window_minutes = row.get("window_minutes")
             if window_minutes is not None:
                 pipeline["window_minutes"] = int(window_minutes)
-            dag_map[dag_id]["pipelines"].append(pipeline)
+            dag_map[dag_name]["pipelines"].append(pipeline)
 
         for dag_cfg in dag_map.values():
             dag_cfg["pipelines"].sort(

@@ -70,10 +70,42 @@ Roles/users are defined in `clickhouse/init/00_databases.sql`.
 - SQL templates: `airflow/dags/sql/*.sql` (one pipeline per file)
 - Default window: 10 minutes (override with `dag_run.conf` `start_ts`/`end_ts` or `window_minutes`)
 
-To add a new gold pipeline:
-1) Insert a row in `metadata.gold_pipelines` with `pipeline_id`, `sql_path`, and `target_table`
-2) Create the SQL template under `airflow/dags/sql/` using `{{ start_ts }}`, `{{ end_ts }}`, and `{{ params.* }}`
-3) Trigger `metadata_updater` (optional) to regenerate the YAML snapshot
+To add a new gold pipeline (existing DAG):
+1) Get the DAG numeric id:
+   `SELECT id FROM metadata.gold_dags WHERE dag_name = 'gold_star_schema';`
+2) Insert a row in `metadata.gold_pipelines` with `dag_id`, `pipeline_name`, `sql_path`, and `target_table`
+3) Create the SQL template under `airflow/dags/sql/` using `{{ start_ts }}`, `{{ end_ts }}`, and `{{ params.* }}`
+4) Trigger `metadata_updater` (optional) to regenerate the YAML snapshot
+
+To add a new DAG + pipelines (new data source):
+1) Insert a row in `metadata.gold_dags`:
+```sql
+INSERT INTO metadata.gold_dags (
+  dag_name,
+  schedule_cron,
+  timezone,
+  owner,
+  tags,
+  max_active_tasks,
+  default_window_minutes,
+  enabled
+) VALUES (
+  'gold_new_source',
+  '*/5 * * * *',
+  'Asia/Jakarta',
+  'data-eng',
+  ARRAY['gold', 'clickhouse'],
+  8,
+  10,
+  TRUE
+)
+ON CONFLICT (dag_name) DO NOTHING;
+```
+2) Get the numeric id for the new DAG:
+   `SELECT id FROM metadata.gold_dags WHERE dag_name = 'gold_new_source';`
+3) Insert pipeline rows in `metadata.gold_pipelines` using that `dag_id` (set `depends_on` with pipeline_name values).
+4) Add SQL templates under `airflow/dags/sql/`.
+5) Wait for the DAG parser to refresh or trigger `metadata_updater` (optional).
 
 Example backfill run:
 
@@ -91,6 +123,7 @@ docker compose exec -T airflow-webserver airflow dags trigger gold_star_schema \
 
 ## Metadata store (Postgres)
 Metadata schema and seed data live in `postgres/init/10_metadata.sql`.
+`metadata.gold_pipelines.dag_id` is a numeric FK to `metadata.gold_dags.id`.
 If the Postgres volume already exists, apply the SQL manually:
 
 ```bash
@@ -100,17 +133,23 @@ docker compose exec -T postgres psql -U airflow -d airflow -f /docker-entrypoint
 Example insert for a new pipeline:
 
 ```sql
+WITH dag AS (
+  SELECT id
+  FROM metadata.gold_dags
+  WHERE dag_name = 'gold_star_schema'
+)
 INSERT INTO metadata.gold_pipelines (
   dag_id,
-  pipeline_id,
+  pipeline_name,
   enabled,
   sql_path,
   window_minutes,
   depends_on,
   target_table,
   pipeline_order
-) VALUES (
-  'gold_star_schema',
+)
+SELECT
+  dag.id,
   'fact_new_events',
   TRUE,
   'sql/fact_new_events.sql',
@@ -118,7 +157,7 @@ INSERT INTO metadata.gold_pipelines (
   ARRAY['dim_date', 'dim_time'],
   'gold.fact_new_events',
   20
-);
+FROM dag;
 ```
 
 ## Superset
