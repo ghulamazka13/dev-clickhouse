@@ -1,11 +1,11 @@
-﻿WITH
-  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
-  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
-INSERT INTO {{ params.target_table }} (
+﻿INSERT INTO {{ params.target_table }} (
   tag_key,
   tag_value,
   updated_at
 )
+WITH
+  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
+  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
 SELECT
   s.tag_key,
   s.tag_value,

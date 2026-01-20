@@ -20,9 +20,6 @@ WHERE is_current = 1
       AND ifNull(b.host_ip, toIPv6('::')) != ifNull(host_ip, toIPv6('::'))
   );
 
-WITH
-  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
-  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
 INSERT INTO {{ params.target_table }} (
   host_key,
   host_name,
@@ -31,6 +28,9 @@ INSERT INTO {{ params.target_table }} (
   effective_to,
   is_current
 )
+WITH
+  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
+  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
 SELECT
   cityHash64(host_name, toString(change_ts)) AS host_key,
   host_name,

@@ -25,7 +25,11 @@ docker compose ps
 - Airflow: http://localhost:8088 (admin/admin)
 - Superset: http://localhost:8089 (admin/admin)
 - ClickHouse HTTP: http://localhost:8123
-- CHouse UI: http://localhost:8087
+- CHouse UI: http://localhost:8087 (admin@localhost / admin123!)
+
+In CHouse UI, add a ClickHouse connection:
+- URL: http://clickhouse:8123
+- User/password: admin/admin (or etl_runner/etl_runner)
 
 4) Trigger the gold pipeline (optional)
 
@@ -127,7 +131,37 @@ clickhouse+connect://superset:superset@clickhouse:8123/default
 Add datasets from the gold schema (facts + dims).
 
 ## Optional one-time backfill (from Postgres)
-If you have historical data in Postgres, run a one-time import into ClickHouse using the `postgresql` table function or CSV streaming. See `scripts/clickhouse_examples.sql` for query examples and adapt the import to your source.
+If you have historical data in Postgres, run a one-time import into ClickHouse using the `postgresql` table function. A ready-to-run backfill script is provided in `scripts/postgres_to_clickhouse_backfill.sql`.
+
+Example (legacy Postgres running on port 5433):
+
+```bash
+docker run -d --name dev-airflow-legacy-postgres -p 5433:5432 \
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=analytics \
+  -v dev-airflow-1_postgres_data:/var/lib/postgresql/data \
+  pgduckdb/pgduckdb:16-v1.1.1
+
+Get-Content scripts/postgres_to_clickhouse_backfill.sql | \
+  docker compose exec -T clickhouse clickhouse-client \
+    --user etl_runner --password etl_runner --multiquery
+```
+
+Update the host/port/user/password in the SQL file to match your production Postgres instance.
+
+## One-time gold migration (from legacy Postgres)
+If you already have gold tables in a legacy Postgres, use `scripts/postgres_gold_to_clickhouse_backfill.sql`.
+
+Notes:
+- Gold tables must exist in ClickHouse (run `clickhouse/init/03_gold_tables.sql` if needed).
+- This migration preserves the legacy surrogate keys. If you plan to keep running the gold DAG, consider rebuilding gold from bronze instead so keys stay consistent.
+
+Example:
+
+```bash
+Get-Content scripts/postgres_gold_to_clickhouse_backfill.sql | \
+  docker compose exec -T clickhouse clickhouse-client \
+    --user etl_runner --password etl_runner --multiquery
+```
 
 ## Troubleshooting
 - If Kafka ingestion is empty, verify the broker `10.110.12.20:9092` is reachable from the ClickHouse container.

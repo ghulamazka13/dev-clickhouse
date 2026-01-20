@@ -1,7 +1,4 @@
-﻿WITH
-  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
-  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
-INSERT INTO {{ params.target_table }} (
+﻿INSERT INTO {{ params.target_table }} (
   event_key,
   event_dataset,
   event_kind,
@@ -9,6 +6,9 @@ INSERT INTO {{ params.target_table }} (
   event_provider,
   updated_at
 )
+WITH
+  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
+  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
 SELECT
   s.event_key,
   s.event_dataset,

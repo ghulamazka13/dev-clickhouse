@@ -28,9 +28,6 @@ WHERE is_current = 1
       )
   );
 
-WITH
-  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
-  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
 INSERT INTO {{ params.target_table }} (
   rule_key,
   rule_id,
@@ -41,6 +38,9 @@ INSERT INTO {{ params.target_table }} (
   effective_to,
   is_current
 )
+WITH
+  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
+  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
 SELECT
   cityHash64(rule_id, toString(change_ts)) AS rule_key,
   rule_id,

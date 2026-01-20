@@ -33,17 +33,22 @@ services:
     restart: unless-stopped
 
   chouse:
-    image: ghcr.io/chouseio/chouse:latest
+    build:
+      context: ./chouse-ui
+      dockerfile: Dockerfile
     ports:
-      - "8087:8000"
+      - "8087:5521"
     environment:
-      - CLICKHOUSE_HOST=clickhouse
-      - CLICKHOUSE_PORT=8123
-      - CLICKHOUSE_USER=admin
-      - CLICKHOUSE_PASSWORD=admin
-      - CLICKHOUSE_DATABASE=default
+      - NODE_ENV=production
+      - PORT=5521
+      - STATIC_PATH=/app/dist
+      - RBAC_DB_TYPE=sqlite
+      - RBAC_SQLITE_PATH=/app/data/rbac.db
+      - JWT_SECRET=dev-jwt-secret-change-me-please-32chars
+      - RBAC_ENCRYPTION_KEY=dev-encryption-key-change-me-please-64chars-0000000000000000
+      - RBAC_ENCRYPTION_SALT=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     volumes:
-      - chouse_data:/data
+      - chouse_data:/app/data
     depends_on:
       - clickhouse
     restart: unless-stopped
@@ -70,7 +75,7 @@ services:
       - CLICKHOUSE_USER=etl_runner
       - CLICKHOUSE_PASSWORD=etl_runner
       - CLICKHOUSE_DATABASE=default
-      - PIP_EXTRA_REQUIREMENTS=clickhouse-connect==0.7.16 pyyaml==6.0.2
+      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-connect==0.7.16 pyyaml==6.0.2
     volumes:
       - ./airflow/dags:/opt/airflow/dags
     entrypoint: /bin/bash
@@ -106,7 +111,7 @@ services:
       - CLICKHOUSE_USER=etl_runner
       - CLICKHOUSE_PASSWORD=etl_runner
       - CLICKHOUSE_DATABASE=default
-      - PIP_EXTRA_REQUIREMENTS=clickhouse-connect==0.7.16 pyyaml==6.0.2
+      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-connect==0.7.16 pyyaml==6.0.2
     volumes:
       - ./airflow/dags:/opt/airflow/dags
     command: webserver
@@ -128,7 +133,7 @@ services:
       - CLICKHOUSE_USER=etl_runner
       - CLICKHOUSE_PASSWORD=etl_runner
       - CLICKHOUSE_DATABASE=default
-      - PIP_EXTRA_REQUIREMENTS=clickhouse-connect==0.7.16 pyyaml==6.0.2
+      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-connect==0.7.16 pyyaml==6.0.2
     volumes:
       - ./airflow/dags:/opt/airflow/dags
     command: scheduler

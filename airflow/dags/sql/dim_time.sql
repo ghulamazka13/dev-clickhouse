@@ -1,13 +1,13 @@
-﻿WITH
-  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
-  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
-INSERT INTO {{ params.target_table }} (
+﻿INSERT INTO {{ params.target_table }} (
   time_key,
   hour,
   minute,
   second,
   updated_at
 )
+WITH
+  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
+  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
 SELECT
   s.time_key,
   s.hour,

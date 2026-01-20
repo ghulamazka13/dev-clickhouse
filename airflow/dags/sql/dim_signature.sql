@@ -1,7 +1,4 @@
-﻿WITH
-  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
-  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
-INSERT INTO {{ params.target_table }} (
+﻿INSERT INTO {{ params.target_table }} (
   signature_key,
   signature_id,
   signature,
@@ -9,6 +6,9 @@ INSERT INTO {{ params.target_table }} (
   alert_action,
   updated_at
 )
+WITH
+  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
+  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
 SELECT
   s.signature_key,
   s.signature_id,

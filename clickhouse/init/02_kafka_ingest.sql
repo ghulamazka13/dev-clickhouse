@@ -88,28 +88,12 @@ SELECT
   coalesce(
     parseDateTime64BestEffortOrNull(nullIf(JSONExtractString(raw, '@timestamp'), '')),
     parseDateTime64BestEffortOrNull(nullIf(JSONExtractString(raw, 'event.ingested'), '')),
-    toDateTime64OrNull(
-      toFloat64OrNull(JSONExtractString(raw, 'event.start')) / 1000.0,
-      3,
-      'UTC'
-    ),
-    toDateTime64OrNull(
-      toFloat64OrNull(JSONExtractString(raw, 'event.end')) / 1000.0,
-      3,
-      'UTC'
-    )
+    fromUnixTimestamp64Milli(toInt64OrNull(JSONExtractString(raw, 'event.start'))),
+    fromUnixTimestamp64Milli(toInt64OrNull(JSONExtractString(raw, 'event.end')))
   ) AS event_ts,
   parseDateTime64BestEffortOrNull(nullIf(JSONExtractString(raw, 'event.ingested'), '')) AS event_ingested_ts,
-  toDateTime64OrNull(
-    toFloat64OrNull(JSONExtractString(raw, 'event.start')) / 1000.0,
-    3,
-    'UTC'
-  ) AS event_start_ts,
-  toDateTime64OrNull(
-    toFloat64OrNull(JSONExtractString(raw, 'event.end')) / 1000.0,
-    3,
-    'UTC'
-  ) AS event_end_ts,
+  fromUnixTimestamp64Milli(toInt64OrNull(JSONExtractString(raw, 'event.start'))) AS event_start_ts,
+  fromUnixTimestamp64Milli(toInt64OrNull(JSONExtractString(raw, 'event.end'))) AS event_end_ts,
   JSONExtractString(raw, 'event.dataset') AS event_dataset,
   JSONExtractString(raw, 'event.kind') AS event_kind,
   JSONExtractString(raw, 'event.module') AS event_module,
@@ -138,23 +122,11 @@ SELECT
     parseDateTime64BestEffortOrNull(nullIf(JSONExtractString(raw, '@timestamp'), '')),
     parseDateTime64BestEffortOrNull(nullIf(JSONExtractString(raw, 'zeek.ts'), '')),
     parseDateTime64BestEffortOrNull(nullIf(JSONExtractString(raw, 'event.ingested'), '')),
-    toDateTime64OrNull(
-      toFloat64OrNull(JSONExtractString(raw, 'event.start')) / 1000.0,
-      3,
-      'UTC'
-    )
+    fromUnixTimestamp64Milli(toInt64OrNull(JSONExtractString(raw, 'event.start')))
   ) AS event_ts,
   parseDateTime64BestEffortOrNull(nullIf(JSONExtractString(raw, 'event.ingested'), '')) AS event_ingested_ts,
-  toDateTime64OrNull(
-    toFloat64OrNull(JSONExtractString(raw, 'event.start')) / 1000.0,
-    3,
-    'UTC'
-  ) AS event_start_ts,
-  toDateTime64OrNull(
-    toFloat64OrNull(JSONExtractString(raw, 'event.end')) / 1000.0,
-    3,
-    'UTC'
-  ) AS event_end_ts,
+  fromUnixTimestamp64Milli(toInt64OrNull(JSONExtractString(raw, 'event.start'))) AS event_start_ts,
+  fromUnixTimestamp64Milli(toInt64OrNull(JSONExtractString(raw, 'event.end'))) AS event_end_ts,
   JSONExtractString(raw, 'event.dataset') AS event_dataset,
   JSONExtractString(raw, 'event.kind') AS event_kind,
   JSONExtractString(raw, 'event.module') AS event_module,

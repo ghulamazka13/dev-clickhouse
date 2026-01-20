@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_host (
   is_current UInt8
 )
 ENGINE = MergeTree
-ORDER BY (host_name, effective_from);
+ORDER BY (ifNull(host_name, ''), effective_from);
 
 CREATE TABLE IF NOT EXISTS gold.dim_tag (
   tag_key UInt64,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_agent (
   is_current UInt8
 )
 ENGINE = MergeTree
-ORDER BY (agent_name, effective_from);
+ORDER BY (ifNull(agent_name, ''), effective_from);
 
 CREATE TABLE IF NOT EXISTS gold.dim_rule (
   rule_key UInt64,
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_rule (
   is_current UInt8
 )
 ENGINE = MergeTree
-ORDER BY (rule_id, effective_from);
+ORDER BY (ifNull(rule_id, ''), effective_from);
 
 CREATE TABLE IF NOT EXISTS gold.dim_event (
   event_key UInt64,

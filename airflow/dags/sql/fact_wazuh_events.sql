@@ -1,7 +1,4 @@
-﻿WITH
-  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
-  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
-INSERT INTO {{ params.target_table }} (
+﻿INSERT INTO {{ params.target_table }} (
   event_id,
   event_ts,
   event_ingested_ts,
@@ -18,6 +15,9 @@ INSERT INTO {{ params.target_table }} (
   message,
   updated_at
 )
+WITH
+  parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
+  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
 SELECT
   b.event_id,
   b.event_ts,
@@ -35,18 +35,15 @@ SELECT
   b.message,
   now64(3, 'UTC') AS updated_at
 FROM bronze.wazuh_events_raw b
-LEFT JOIN gold.dim_agent a
+ASOF LEFT JOIN gold.dim_agent a
   ON a.agent_name = coalesce(nullIf(b.agent_name, ''), toString(b.agent_ip))
   AND b.event_ts >= a.effective_from
-  AND (a.effective_to IS NULL OR b.event_ts < a.effective_to)
-LEFT JOIN gold.dim_host h
+ASOF LEFT JOIN gold.dim_host h
   ON h.host_name = coalesce(nullIf(b.host_name, ''), toString(b.host_ip))
   AND b.event_ts >= h.effective_from
-  AND (h.effective_to IS NULL OR b.event_ts < h.effective_to)
-LEFT JOIN gold.dim_rule r
+ASOF LEFT JOIN gold.dim_rule r
   ON r.rule_id = nullIf(b.rule_id, '')
   AND b.event_ts >= r.effective_from
-  AND (r.effective_to IS NULL OR b.event_ts < r.effective_to)
 LEFT JOIN gold.dim_event e
   ON e.event_key = cityHash64(
     ifNull(b.event_dataset, ''),

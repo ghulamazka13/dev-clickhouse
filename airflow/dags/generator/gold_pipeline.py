@@ -10,7 +10,6 @@ from airflow import DAG
 from airflow.models.param import Param
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
-from airflow.utils.dates import days_ago
 from jinja2 import Template
 
 
@@ -279,6 +278,11 @@ class GoldPipelineGenerator:
         dag_id = dag_cfg["dag_id"]
         schedule_cron = dag_cfg.get("schedule_cron") or "*/5 * * * *"
         timezone = dag_cfg.get("timezone") or "Asia/Jakarta"
+        try:
+            tz = pendulum.timezone(timezone)
+        except Exception:
+            logging.warning("Invalid timezone %s; falling back to UTC", timezone)
+            tz = pendulum.UTC
         owner = dag_cfg.get("owner") or "data-eng"
         tags = dag_cfg.get("tags") or []
         max_active_tasks = int(dag_cfg.get("max_active_tasks") or 8)
@@ -298,7 +302,7 @@ class GoldPipelineGenerator:
         with DAG(
             dag_id=dag_id,
             default_args=default_args,
-            start_date=days_ago(1),
+            start_date=pendulum.now(tz).subtract(days=1),
             schedule_interval=schedule_cron,
             catchup=False,
             max_active_runs=1,
@@ -310,7 +314,6 @@ class GoldPipelineGenerator:
                 "end_ts": Param("", type="string"),
                 "window_minutes": Param(default_window_minutes, type="integer"),
             },
-            timezone=timezone,
         ) as dag:
             start = EmptyOperator(task_id="start")
             end = EmptyOperator(task_id="end")

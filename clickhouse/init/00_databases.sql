@@ -13,6 +13,8 @@ GRANT SELECT ON system.columns TO bi_reader;
 
 GRANT SELECT, INSERT, ALTER ON bronze.* TO etl_role;
 GRANT SELECT, INSERT, ALTER ON gold.* TO etl_role;
+GRANT CREATE TEMPORARY TABLE ON *.* TO etl_role;
+GRANT POSTGRES ON *.* TO etl_role;
 
 GRANT etl_role TO etl_runner;
 GRANT bi_reader TO superset;
