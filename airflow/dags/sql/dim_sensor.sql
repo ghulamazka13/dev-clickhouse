@@ -1,4 +1,4 @@
-﻿INSERT INTO {{ params.target_table }} (
+INSERT INTO {{ params.target_table }} (
   sensor_key,
   sensor_type,
   sensor_name,
@@ -11,7 +11,7 @@ SELECT
   s.sensor_key,
   s.sensor_type,
   s.sensor_name,
-  now64(3, 'UTC') AS updated_at
+  now64(3, 'Asia/Jakarta') AS updated_at
 FROM (
   SELECT DISTINCT
     cityHash64(ifNull(sensor_type, ''), ifNull(sensor_name, '')) AS sensor_key,

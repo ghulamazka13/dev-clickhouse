@@ -1,4 +1,4 @@
-﻿INSERT INTO {{ params.target_table }} (
+INSERT INTO {{ params.target_table }} (
   event_key,
   event_dataset,
   event_kind,
@@ -15,7 +15,7 @@ SELECT
   s.event_kind,
   s.event_module,
   s.event_provider,
-  now64(3, 'UTC') AS updated_at
+  now64(3, 'Asia/Jakarta') AS updated_at
 FROM (
   SELECT DISTINCT
     cityHash64(

@@ -1,4 +1,4 @@
-﻿INSERT INTO {{ params.target_table }} (
+INSERT INTO {{ params.target_table }} (
   protocol_key,
   protocol,
   updated_at
@@ -9,7 +9,7 @@ WITH
 SELECT
   s.protocol_key,
   s.protocol,
-  now64(3, 'UTC') AS updated_at
+  now64(3, 'Asia/Jakarta') AS updated_at
 FROM (
   SELECT DISTINCT
     cityHash64(ifNull(protocol, '')) AS protocol_key,

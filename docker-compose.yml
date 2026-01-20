@@ -4,7 +4,7 @@ services:
   postgres:
     image: postgres:16.3
     ports:
-      - "5432:5432"
+      - "15432:5432"
     environment:
       - POSTGRES_USER=airflow
       - POSTGRES_PASSWORD=airflow
@@ -21,8 +21,8 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:24.3
     ports:
-      - "8123:8123"
-      - "9000:9000"
+      - "18123:8123"
+      - "19000:9000"
     environment:
       - CLICKHOUSE_USER=admin
       - CLICKHOUSE_PASSWORD=admin
@@ -37,7 +37,7 @@ services:
       context: ./chouse-ui
       dockerfile: Dockerfile
     ports:
-      - "8087:5521"
+      - "18087:5521"
     environment:
       - NODE_ENV=production
       - PORT=5521
@@ -98,7 +98,7 @@ services:
       airflow-init:
         condition: service_completed_successfully
     ports:
-      - "8088:8080"
+      - "18088:8080"
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
@@ -141,7 +141,7 @@ services:
   superset:
     build: ./superset
     ports:
-      - "8089:8088"
+      - "18089:8088"
     environment:
       - SUPERSET_SECRET_KEY=supersetsecret
       - SUPERSET_LOAD_EXAMPLES=no

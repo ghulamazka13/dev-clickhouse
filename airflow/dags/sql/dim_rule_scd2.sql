@@ -1,7 +1,7 @@
-﻿ALTER TABLE {{ params.target_table }}
+ALTER TABLE {{ params.target_table }}
 UPDATE
   effective_to = (
-    SELECT min(b.event_ts)
+    SELECT min(toTimeZone(b.event_ts, 'Asia/Jakarta'))
     FROM bronze.wazuh_events_raw b
     WHERE b.event_ts >= parseDateTime64BestEffort('{{ start_ts }}')
       AND b.event_ts < parseDateTime64BestEffort('{{ end_ts }}')
@@ -56,7 +56,7 @@ FROM (
     argMin(b.rule_level, b.event_ts) AS rule_level,
     argMin(b.rule_name, b.event_ts) AS rule_name,
     argMin(b.rule_ruleset, b.event_ts) AS rule_ruleset,
-    min(b.event_ts) AS change_ts
+    min(toTimeZone(b.event_ts, 'Asia/Jakarta')) AS change_ts
   FROM bronze.wazuh_events_raw b
   LEFT JOIN {{ params.target_table }} d
     ON d.rule_id = nullIf(b.rule_id, '')

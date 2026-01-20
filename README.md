@@ -22,10 +22,10 @@ docker compose ps
 ```
 
 3) Open UIs
-- Airflow: http://localhost:8088 (admin/admin)
-- Superset: http://localhost:8089 (admin/admin)
-- ClickHouse HTTP: http://localhost:8123
-- CHouse UI: http://localhost:8087 (admin@localhost / admin123!)
+- Airflow: http://localhost:18088 (admin/admin)
+- Superset: http://localhost:18089 (admin/admin)
+- ClickHouse HTTP: http://localhost:18123
+- CHouse UI: http://localhost:18087 (admin@localhost / admin123!)
 
 In CHouse UI, add a ClickHouse connection:
 - URL: http://clickhouse:8123
@@ -69,6 +69,7 @@ Roles/users are defined in `clickhouse/init/00_databases.sql`.
 - Metadata updater DAG: `metadata_updater` (exports a YAML snapshot to `airflow/dags/gold_pipelines.yml`)
 - SQL templates: `airflow/dags/sql/*.sql` (one pipeline per file)
 - Default window: 10 minutes (override with `dag_run.conf` `start_ts`/`end_ts` or `window_minutes`)
+- Bronze and gold timestamps are stored in `Asia/Jakarta` (UTC+7).
 
 To add a new gold pipeline (existing DAG):
 1) Get the DAG numeric id:
@@ -172,10 +173,10 @@ Add datasets from the gold schema (facts + dims).
 ## Optional one-time backfill (from Postgres)
 If you have historical data in Postgres, run a one-time import into ClickHouse using the `postgresql` table function. A ready-to-run backfill script is provided in `scripts/postgres_to_clickhouse_backfill.sql`.
 
-Example (legacy Postgres running on port 5433):
+Example (legacy Postgres running on port 15433):
 
 ```bash
-docker run -d --name dev-airflow-legacy-postgres -p 5433:5432 \
+docker run -d --name dev-airflow-legacy-postgres -p 15433:5432 \
   -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=analytics \
   -v dev-airflow-1_postgres_data:/var/lib/postgresql/data \
   pgduckdb/pgduckdb:16-v1.1.1

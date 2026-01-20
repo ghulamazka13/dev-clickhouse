@@ -1,4 +1,4 @@
-﻿INSERT INTO {{ params.target_table }} (
+INSERT INTO {{ params.target_table }} (
   event_id,
   event_ts,
   event_ingested_ts,
@@ -34,54 +34,67 @@
 )
 WITH
   parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
-  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
+  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts,
+  'Asia/Jakarta' AS tz
 SELECT
-  b.event_id,
-  b.event_ts,
-  b.event_ingested_ts,
-  b.event_start_ts,
-  b.event_end_ts,
-  toYYYYMMDD(b.event_ts) AS date_key,
-  toUInt32(toHour(b.event_ts) * 10000 + toMinute(b.event_ts) * 100 + toSecond(b.event_ts)) AS time_key,
+  src.event_id,
+  src.event_ts_local AS event_ts,
+  src.event_ingested_ts_local AS event_ingested_ts,
+  src.event_start_ts_local AS event_start_ts,
+  src.event_end_ts_local AS event_end_ts,
+  toYYYYMMDD(src.event_ts_local) AS date_key,
+  toUInt32(
+    toHour(src.event_ts_local) * 10000
+    + toMinute(src.event_ts_local) * 100
+    + toSecond(src.event_ts_local)
+  ) AS time_key,
   s.sensor_key,
   p.protocol_key,
   e.event_key,
-  b.zeek_uid,
-  b.src_ip,
-  b.dest_ip,
-  b.src_port,
-  b.dest_port,
-  b.application,
-  b.network_type,
-  b.direction,
-  b.community_id,
-  b.bytes,
-  b.packets,
-  b.orig_bytes,
-  b.resp_bytes,
-  b.orig_pkts,
-  b.resp_pkts,
-  b.conn_state,
-  b.conn_state_description,
-  b.duration AS duration_seconds,
-  b.history,
-  b.vlan_id,
-  b.message,
-  now64(3, 'UTC') AS updated_at
-FROM bronze.zeek_events_raw b
+  src.zeek_uid,
+  src.src_ip,
+  src.dest_ip,
+  src.src_port,
+  src.dest_port,
+  src.application,
+  src.network_type,
+  src.direction,
+  src.community_id,
+  src.bytes,
+  src.packets,
+  src.orig_bytes,
+  src.resp_bytes,
+  src.orig_pkts,
+  src.resp_pkts,
+  src.conn_state,
+  src.conn_state_description,
+  src.duration AS duration_seconds,
+  src.history,
+  src.vlan_id,
+  src.message,
+  now64(3, 'Asia/Jakarta') AS updated_at
+FROM (
+  SELECT
+    b.*,
+    toTimeZone(b.event_ts, tz) AS event_ts_local,
+    toTimeZone(b.event_ingested_ts, tz) AS event_ingested_ts_local,
+    toTimeZone(b.event_start_ts, tz) AS event_start_ts_local,
+    toTimeZone(b.event_end_ts, tz) AS event_end_ts_local
+  FROM bronze.zeek_events_raw b
+  WHERE b.event_ts >= start_ts AND b.event_ts < end_ts
+) src
 LEFT JOIN gold.dim_sensor s
-  ON s.sensor_key = cityHash64('zeek', ifNull(b.sensor_name, ''))
+  ON s.sensor_key = cityHash64('zeek', ifNull(src.sensor_name, ''))
 LEFT JOIN gold.dim_protocol p
-  ON p.protocol_key = cityHash64(ifNull(b.protocol, ''))
+  ON p.protocol_key = cityHash64(ifNull(src.protocol, ''))
 LEFT JOIN gold.dim_event e
   ON e.event_key = cityHash64(
-    ifNull(b.event_dataset, ''),
-    ifNull(b.event_kind, ''),
-    ifNull(b.event_module, ''),
-    ifNull(b.event_provider, '')
+    ifNull(src.event_dataset, ''),
+    ifNull(src.event_kind, ''),
+    ifNull(src.event_module, ''),
+    ifNull(src.event_provider, '')
   )
 LEFT JOIN {{ params.target_table }} existing
-  ON existing.event_id = b.event_id
-  AND existing.event_ts = b.event_ts
-WHERE b.event_ts >= start_ts AND b.event_ts < end_ts
-  AND existing.event_id IS NULL;
+  ON existing.event_id = src.event_id
+  AND existing.event_ts = src.event_ts_local
+WHERE existing.event_id IS NULL;

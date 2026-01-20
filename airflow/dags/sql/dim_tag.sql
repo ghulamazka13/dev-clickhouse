@@ -1,4 +1,4 @@
-﻿INSERT INTO {{ params.target_table }} (
+INSERT INTO {{ params.target_table }} (
   tag_key,
   tag_value,
   updated_at
@@ -9,7 +9,7 @@ WITH
 SELECT
   s.tag_key,
   s.tag_value,
-  now64(3, 'UTC') AS updated_at
+  now64(3, 'Asia/Jakarta') AS updated_at
 FROM (
   SELECT DISTINCT
     cityHash64(tag_value) AS tag_key,

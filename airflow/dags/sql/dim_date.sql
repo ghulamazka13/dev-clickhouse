@@ -1,4 +1,4 @@
-﻿INSERT INTO {{ params.target_table }} (
+INSERT INTO {{ params.target_table }} (
   date_key,
   date,
   year,
@@ -11,7 +11,8 @@
 )
 WITH
   parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
-  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
+  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts,
+  'Asia/Jakarta' AS tz
 SELECT
   s.date_key,
   s.date,
@@ -21,7 +22,7 @@ SELECT
   s.day,
   s.week_of_year,
   s.day_of_week,
-  now64(3, 'UTC') AS updated_at
+  now64(3, tz) AS updated_at
 FROM (
   SELECT DISTINCT
     toYYYYMMDD(event_date) AS date_key,
@@ -33,15 +34,15 @@ FROM (
     toISOWeek(event_date) AS week_of_year,
     toDayOfWeek(event_date) AS day_of_week
   FROM (
-    SELECT toDate(event_ts) AS event_date
+    SELECT toDate(toTimeZone(event_ts, tz)) AS event_date
     FROM bronze.wazuh_events_raw
     WHERE event_ts >= start_ts AND event_ts < end_ts
     UNION ALL
-    SELECT toDate(event_ts) AS event_date
+    SELECT toDate(toTimeZone(event_ts, tz)) AS event_date
     FROM bronze.suricata_events_raw
     WHERE event_ts >= start_ts AND event_ts < end_ts
     UNION ALL
-    SELECT toDate(event_ts) AS event_date
+    SELECT toDate(toTimeZone(event_ts, tz)) AS event_date
     FROM bronze.zeek_events_raw
     WHERE event_ts >= start_ts AND event_ts < end_ts
   )

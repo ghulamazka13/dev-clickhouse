@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_date (
   day UInt8,
   week_of_year UInt8,
   day_of_week UInt8,
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY date_key;
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_time (
   hour UInt8,
   minute UInt8,
   second UInt8,
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY time_key;
@@ -26,8 +26,8 @@ CREATE TABLE IF NOT EXISTS gold.dim_host (
   host_key UInt64,
   host_name Nullable(String),
   host_ip Nullable(IPv6),
-  effective_from DateTime64(3, 'UTC'),
-  effective_to Nullable(DateTime64(3, 'UTC')),
+  effective_from DateTime64(3, 'Asia/Jakarta'),
+  effective_to Nullable(DateTime64(3, 'Asia/Jakarta')),
   is_current UInt8
 )
 ENGINE = MergeTree
@@ -36,7 +36,7 @@ ORDER BY (ifNull(host_name, ''), effective_from);
 CREATE TABLE IF NOT EXISTS gold.dim_tag (
   tag_key UInt64,
   tag_value String,
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY tag_key;
@@ -45,8 +45,8 @@ CREATE TABLE IF NOT EXISTS gold.dim_agent (
   agent_key UInt64,
   agent_name Nullable(String),
   agent_ip Nullable(IPv6),
-  effective_from DateTime64(3, 'UTC'),
-  effective_to Nullable(DateTime64(3, 'UTC')),
+  effective_from DateTime64(3, 'Asia/Jakarta'),
+  effective_to Nullable(DateTime64(3, 'Asia/Jakarta')),
   is_current UInt8
 )
 ENGINE = MergeTree
@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS gold.dim_rule (
   rule_level Nullable(Int32),
   rule_name Nullable(String),
   rule_ruleset Nullable(String),
-  effective_from DateTime64(3, 'UTC'),
-  effective_to Nullable(DateTime64(3, 'UTC')),
+  effective_from DateTime64(3, 'Asia/Jakarta'),
+  effective_to Nullable(DateTime64(3, 'Asia/Jakarta')),
   is_current UInt8
 )
 ENGINE = MergeTree
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_event (
   event_kind Nullable(String),
   event_module Nullable(String),
   event_provider Nullable(String),
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY event_key;
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_sensor (
   sensor_key UInt64,
   sensor_type Nullable(String),
   sensor_name Nullable(String),
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY sensor_key;
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_signature (
   signature Nullable(String),
   category Nullable(String),
   alert_action Nullable(String),
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY signature_key;
@@ -99,17 +99,17 @@ ORDER BY signature_key;
 CREATE TABLE IF NOT EXISTS gold.dim_protocol (
   protocol_key UInt64,
   protocol Nullable(String),
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY protocol_key;
 
 CREATE TABLE IF NOT EXISTS gold.fact_wazuh_events (
   event_id String,
-  event_ts DateTime64(3, 'UTC'),
-  event_ingested_ts Nullable(DateTime64(3, 'UTC')),
-  event_start_ts Nullable(DateTime64(3, 'UTC')),
-  event_end_ts Nullable(DateTime64(3, 'UTC')),
+  event_ts DateTime64(3, 'Asia/Jakarta'),
+  event_ingested_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
+  event_start_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
+  event_end_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
   date_key UInt32,
   time_key UInt32,
   agent_key Nullable(UInt64),
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS gold.fact_wazuh_events (
   lag_seconds Nullable(Float64),
   duration_seconds Nullable(Float64),
   message Nullable(String),
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 PARTITION BY toDate(event_ts)
@@ -127,7 +127,7 @@ ORDER BY (event_id, event_ts);
 
 CREATE TABLE IF NOT EXISTS gold.fact_suricata_events (
   event_id String,
-  event_ts DateTime64(3, 'UTC'),
+  event_ts DateTime64(3, 'Asia/Jakarta'),
   date_key UInt32,
   time_key UInt32,
   sensor_key Nullable(UInt64),
@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS gold.fact_suricata_events (
   flow_id Nullable(String),
   http_url Nullable(String),
   message Nullable(String),
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 PARTITION BY toDate(event_ts)
@@ -152,10 +152,10 @@ ORDER BY (event_id, event_ts);
 
 CREATE TABLE IF NOT EXISTS gold.fact_zeek_events (
   event_id String,
-  event_ts DateTime64(3, 'UTC'),
-  event_ingested_ts Nullable(DateTime64(3, 'UTC')),
-  event_start_ts Nullable(DateTime64(3, 'UTC')),
-  event_end_ts Nullable(DateTime64(3, 'UTC')),
+  event_ts DateTime64(3, 'Asia/Jakarta'),
+  event_ingested_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
+  event_start_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
+  event_end_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
   date_key UInt32,
   time_key UInt32,
   sensor_key Nullable(UInt64),
@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS gold.fact_zeek_events (
   history Nullable(String),
   vlan_id Nullable(String),
   message Nullable(String),
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 PARTITION BY toDate(event_ts)
@@ -190,9 +190,9 @@ ORDER BY (event_id, event_ts);
 
 CREATE TABLE IF NOT EXISTS gold.bridge_wazuh_event_tag (
   event_id String,
-  event_ts DateTime64(3, 'UTC'),
+  event_ts DateTime64(3, 'Asia/Jakarta'),
   tag_key UInt64,
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 PARTITION BY toDate(event_ts)
@@ -200,9 +200,9 @@ ORDER BY (event_id, event_ts, tag_key);
 
 CREATE TABLE IF NOT EXISTS gold.bridge_suricata_event_tag (
   event_id String,
-  event_ts DateTime64(3, 'UTC'),
+  event_ts DateTime64(3, 'Asia/Jakarta'),
   tag_key UInt64,
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 PARTITION BY toDate(event_ts)
@@ -210,9 +210,9 @@ ORDER BY (event_id, event_ts, tag_key);
 
 CREATE TABLE IF NOT EXISTS gold.bridge_zeek_event_tag (
   event_id String,
-  event_ts DateTime64(3, 'UTC'),
+  event_ts DateTime64(3, 'Asia/Jakarta'),
   tag_key UInt64,
-  updated_at DateTime64(3, 'UTC')
+  updated_at DateTime64(3, 'Asia/Jakarta')
 )
 ENGINE = ReplacingMergeTree(updated_at)
 PARTITION BY toDate(event_ts)

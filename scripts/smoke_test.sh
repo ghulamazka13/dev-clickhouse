@@ -20,5 +20,5 @@ docker compose exec -T clickhouse clickhouse-client \
 echo "Triggering Airflow gold_star_schema DAG..."
 docker compose exec -T airflow-webserver airflow dags trigger gold_star_schema
 
-echo "Open Airflow: http://localhost:8088"
-echo "Open Superset: http://localhost:8089"
+echo "Open Airflow: http://localhost:18088"
+echo "Open Superset: http://localhost:18089"

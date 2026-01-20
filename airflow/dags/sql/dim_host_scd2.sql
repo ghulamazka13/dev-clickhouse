@@ -1,7 +1,7 @@
-﻿ALTER TABLE {{ params.target_table }}
+ALTER TABLE {{ params.target_table }}
 UPDATE
   effective_to = (
-    SELECT min(b.event_ts)
+    SELECT min(toTimeZone(b.event_ts, 'Asia/Jakarta'))
     FROM bronze.wazuh_events_raw b
     WHERE b.event_ts >= parseDateTime64BestEffort('{{ start_ts }}')
       AND b.event_ts < parseDateTime64BestEffort('{{ end_ts }}')
@@ -42,7 +42,7 @@ FROM (
   SELECT
     coalesce(nullIf(b.host_name, ''), toString(b.host_ip)) AS host_name,
     argMin(b.host_ip, b.event_ts) AS host_ip,
-    min(b.event_ts) AS change_ts
+    min(toTimeZone(b.event_ts, 'Asia/Jakarta')) AS change_ts
   FROM bronze.wazuh_events_raw b
   LEFT JOIN {{ params.target_table }} d
     ON d.host_name = coalesce(nullIf(b.host_name, ''), toString(b.host_ip))

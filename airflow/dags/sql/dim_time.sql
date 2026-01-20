@@ -1,4 +1,4 @@
-﻿INSERT INTO {{ params.target_table }} (
+INSERT INTO {{ params.target_table }} (
   time_key,
   hour,
   minute,
@@ -7,29 +7,34 @@
 )
 WITH
   parseDateTime64BestEffort('{{ start_ts }}') AS start_ts,
-  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts
+  parseDateTime64BestEffort('{{ end_ts }}') AS end_ts,
+  'Asia/Jakarta' AS tz
 SELECT
   s.time_key,
   s.hour,
   s.minute,
   s.second,
-  now64(3, 'UTC') AS updated_at
+  now64(3, tz) AS updated_at
 FROM (
   SELECT DISTINCT
-    toUInt32(toHour(event_ts) * 10000 + toMinute(event_ts) * 100 + toSecond(event_ts)) AS time_key,
-    toHour(event_ts) AS hour,
-    toMinute(event_ts) AS minute,
-    toSecond(event_ts) AS second
+    toUInt32(
+      toHour(event_ts_local) * 10000
+      + toMinute(event_ts_local) * 100
+      + toSecond(event_ts_local)
+    ) AS time_key,
+    toHour(event_ts_local) AS hour,
+    toMinute(event_ts_local) AS minute,
+    toSecond(event_ts_local) AS second
   FROM (
-    SELECT event_ts
+    SELECT toTimeZone(event_ts, tz) AS event_ts_local
     FROM bronze.wazuh_events_raw
     WHERE event_ts >= start_ts AND event_ts < end_ts
     UNION ALL
-    SELECT event_ts
+    SELECT toTimeZone(event_ts, tz) AS event_ts_local
     FROM bronze.suricata_events_raw
     WHERE event_ts >= start_ts AND event_ts < end_ts
     UNION ALL
-    SELECT event_ts
+    SELECT toTimeZone(event_ts, tz) AS event_ts_local
     FROM bronze.zeek_events_raw
     WHERE event_ts >= start_ts AND event_ts < end_ts
   )

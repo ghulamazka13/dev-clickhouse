@@ -1,4 +1,4 @@
-﻿-- Backfill Postgres (legacy) bronze tables into ClickHouse bronze.
+-- Backfill Postgres (legacy) bronze tables into ClickHouse bronze.
 -- Update host/port/user/password if your legacy Postgres differs.
 
 INSERT INTO bronze.wazuh_events_raw (
@@ -25,10 +25,10 @@ INSERT INTO bronze.wazuh_events_raw (
 )
 SELECT
   event_id,
-  parseDateTime64BestEffortOrNull(toString(event_ts)) AS event_ts,
-  parseDateTime64BestEffortOrNull(toString(event_ingested_ts)) AS event_ingested_ts,
-  parseDateTime64BestEffortOrNull(toString(event_start_ts)) AS event_start_ts,
-  parseDateTime64BestEffortOrNull(toString(event_end_ts)) AS event_end_ts,
+  toTimeZone(parseDateTime64BestEffortOrNull(toString(event_ts)), 'Asia/Jakarta') AS event_ts,
+  toTimeZone(parseDateTime64BestEffortOrNull(toString(event_ingested_ts)), 'Asia/Jakarta') AS event_ingested_ts,
+  toTimeZone(parseDateTime64BestEffortOrNull(toString(event_start_ts)), 'Asia/Jakarta') AS event_start_ts,
+  toTimeZone(parseDateTime64BestEffortOrNull(toString(event_end_ts)), 'Asia/Jakarta') AS event_end_ts,
   event_dataset,
   event_kind,
   event_module,
@@ -45,7 +45,7 @@ SELECT
   message,
   ifNull(toString(raw_data), '') AS raw_data
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'wazuh_events_raw',
   'etl_runner',
@@ -79,7 +79,7 @@ INSERT INTO bronze.suricata_events_raw (
 )
 SELECT
   event_id,
-  parseDateTime64BestEffortOrNull(toString(event_ts)) AS event_ts,
+  toTimeZone(parseDateTime64BestEffortOrNull(toString(event_ts)), 'Asia/Jakarta') AS event_ts,
   sensor_type,
   sensor_name,
   event_type,
@@ -101,7 +101,7 @@ SELECT
   message,
   ifNull(toString(raw_data), '') AS raw_data
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'suricata_events_raw',
   'etl_runner',
@@ -147,10 +147,10 @@ INSERT INTO bronze.zeek_events_raw (
 )
 SELECT
   event_id,
-  parseDateTime64BestEffortOrNull(toString(event_ts)) AS event_ts,
-  parseDateTime64BestEffortOrNull(toString(event_ingested_ts)) AS event_ingested_ts,
-  parseDateTime64BestEffortOrNull(toString(event_start_ts)) AS event_start_ts,
-  parseDateTime64BestEffortOrNull(toString(event_end_ts)) AS event_end_ts,
+  toTimeZone(parseDateTime64BestEffortOrNull(toString(event_ts)), 'Asia/Jakarta') AS event_ts,
+  toTimeZone(parseDateTime64BestEffortOrNull(toString(event_ingested_ts)), 'Asia/Jakarta') AS event_ingested_ts,
+  toTimeZone(parseDateTime64BestEffortOrNull(toString(event_start_ts)), 'Asia/Jakarta') AS event_start_ts,
+  toTimeZone(parseDateTime64BestEffortOrNull(toString(event_end_ts)), 'Asia/Jakarta') AS event_end_ts,
   event_dataset,
   event_kind,
   event_module,
@@ -181,7 +181,7 @@ SELECT
   message,
   ifNull(toString(raw_data), '') AS raw_data
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'zeek_events_raw',
   'etl_runner',

@@ -1,4 +1,4 @@
-﻿INSERT INTO {{ params.target_table }} (
+INSERT INTO {{ params.target_table }} (
   signature_key,
   signature_id,
   signature,
@@ -15,7 +15,7 @@ SELECT
   s.signature,
   s.category,
   s.alert_action,
-  now64(3, 'UTC') AS updated_at
+  now64(3, 'Asia/Jakarta') AS updated_at
 FROM (
   SELECT DISTINCT
     cityHash64(

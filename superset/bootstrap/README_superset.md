@@ -1,6 +1,6 @@
 # Superset bootstrap
 
-1) Log in at http://localhost:8089 with admin/admin
+1) Log in at http://localhost:18089 with admin/admin
 2) Settings -> Database -> + Database
 3) SQLAlchemy URI:
    clickhouse+connect://superset:superset@clickhouse:8123/default

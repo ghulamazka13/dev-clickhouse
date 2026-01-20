@@ -1,4 +1,4 @@
-﻿-- One-time backfill: legacy Postgres gold -> ClickHouse gold.
+-- One-time backfill: legacy Postgres gold -> ClickHouse gold.
 -- Update host/port/user/password/schema for your environment.
 -- Optional: TRUNCATE TABLE gold.<table> before running if reloading.
 
@@ -25,7 +25,7 @@ SELECT
   toUInt8(day_of_week) AS day_of_week,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'dim_date',
   'etl_runner',
@@ -47,7 +47,7 @@ SELECT
   toUInt8(second) AS second,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'dim_time',
   'etl_runner',
@@ -71,7 +71,7 @@ SELECT
   event_provider,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'dim_event',
   'etl_runner',
@@ -91,7 +91,7 @@ SELECT
   sensor_name,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'dim_sensor',
   'etl_runner',
@@ -115,7 +115,7 @@ SELECT
   alert_action,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'dim_signature',
   'etl_runner',
@@ -133,7 +133,7 @@ SELECT
   protocol,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'dim_protocol',
   'etl_runner',
@@ -151,7 +151,7 @@ SELECT
   tag_value,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'dim_tag',
   'etl_runner',
@@ -175,7 +175,7 @@ SELECT
   parseDateTime64BestEffortOrNull(toString(effective_to)) AS effective_to,
   toUInt8(is_current) AS is_current
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'dim_agent',
   'etl_runner',
@@ -199,7 +199,7 @@ SELECT
   parseDateTime64BestEffortOrNull(toString(effective_to)) AS effective_to,
   toUInt8(is_current) AS is_current
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'dim_host',
   'etl_runner',
@@ -227,7 +227,7 @@ SELECT
   parseDateTime64BestEffortOrNull(toString(effective_to)) AS effective_to,
   toUInt8(is_current) AS is_current
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'dim_rule',
   'etl_runner',
@@ -270,7 +270,7 @@ SELECT
   message,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'fact_wazuh_events',
   'etl_runner',
@@ -320,7 +320,7 @@ SELECT
   message,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'fact_suricata_events',
   'etl_runner',
@@ -396,7 +396,7 @@ SELECT
   message,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'fact_zeek_events',
   'etl_runner',
@@ -417,7 +417,7 @@ SELECT
   toUInt64(tag_key) AS tag_key,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'bridge_wazuh_event_tag',
   'etl_runner',
@@ -437,7 +437,7 @@ SELECT
   toUInt64(tag_key) AS tag_key,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'bridge_suricata_event_tag',
   'etl_runner',
@@ -457,7 +457,7 @@ SELECT
   toUInt64(tag_key) AS tag_key,
   now64(3, 'UTC') AS updated_at
 FROM postgresql(
-  'host.docker.internal:5433',
+  'host.docker.internal:15433',
   'analytics',
   'bridge_zeek_event_tag',
   'etl_runner',

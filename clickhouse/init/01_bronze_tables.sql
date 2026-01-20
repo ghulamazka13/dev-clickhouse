@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS bronze.suricata_events_raw (
   event_id String,
-  event_ts DateTime64(3, 'UTC'),
+  event_ts DateTime64(3, 'Asia/Jakarta'),
   sensor_type Nullable(String),
   sensor_name Nullable(String),
   event_type Nullable(String),
@@ -28,10 +28,10 @@ ORDER BY (event_ts, event_id);
 
 CREATE TABLE IF NOT EXISTS bronze.wazuh_events_raw (
   event_id String,
-  event_ts DateTime64(3, 'UTC'),
-  event_ingested_ts Nullable(DateTime64(3, 'UTC')),
-  event_start_ts Nullable(DateTime64(3, 'UTC')),
-  event_end_ts Nullable(DateTime64(3, 'UTC')),
+  event_ts DateTime64(3, 'Asia/Jakarta'),
+  event_ingested_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
+  event_start_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
+  event_end_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
   event_dataset Nullable(String),
   event_kind Nullable(String),
   event_module Nullable(String),
@@ -54,10 +54,10 @@ ORDER BY (event_ts, event_id);
 
 CREATE TABLE IF NOT EXISTS bronze.zeek_events_raw (
   event_id String,
-  event_ts DateTime64(3, 'UTC'),
-  event_ingested_ts Nullable(DateTime64(3, 'UTC')),
-  event_start_ts Nullable(DateTime64(3, 'UTC')),
-  event_end_ts Nullable(DateTime64(3, 'UTC')),
+  event_ts DateTime64(3, 'Asia/Jakarta'),
+  event_ingested_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
+  event_start_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
+  event_end_ts Nullable(DateTime64(3, 'Asia/Jakarta')),
   event_dataset Nullable(String),
   event_kind Nullable(String),
   event_module Nullable(String),
