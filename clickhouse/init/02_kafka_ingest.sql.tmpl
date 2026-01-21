@@ -3,9 +3,9 @@ CREATE TABLE IF NOT EXISTS bronze.security_events_kafka (
 )
 ENGINE = Kafka
 SETTINGS
-  kafka_broker_list = '10.110.12.20:9092',
-  kafka_topic_list = 'malcolm-logs',
-  kafka_group_name = 'security_events_ch',
+  kafka_broker_list = '{{KAFKA_BROKER_LIST}}',
+  kafka_topic_list = '{{KAFKA_TOPIC_LIST}}',
+  kafka_group_name = '{{KAFKA_GROUP_NAME}}',
   kafka_format = 'JSONAsString',
   kafka_num_consumers = 1,
   kafka_skip_broken_messages = 1000;

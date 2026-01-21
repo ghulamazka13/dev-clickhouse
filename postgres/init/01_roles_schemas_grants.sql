@@ -1,12 +1,27 @@
--- Roles
-CREATE ROLE rw_writer LOGIN PASSWORD 'rw_writer';
-CREATE ROLE etl_runner LOGIN PASSWORD 'etl_runner';
-CREATE ROLE bi_reader LOGIN PASSWORD 'bi_reader';
-CREATE ROLE airflow LOGIN PASSWORD 'airflow';
+-- Roles (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rw_writer') THEN
+    CREATE ROLE rw_writer LOGIN PASSWORD 'rw_writer';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'etl_runner') THEN
+    CREATE ROLE etl_runner LOGIN PASSWORD 'etl_runner';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'bi_reader') THEN
+    CREATE ROLE bi_reader LOGIN PASSWORD 'bi_reader';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'airflow') THEN
+    CREATE ROLE airflow LOGIN PASSWORD 'airflow';
+  END IF;
+END
+$$;
 
--- Databases
-CREATE DATABASE airflow OWNER airflow;
-GRANT CONNECT ON DATABASE analytics TO rw_writer, etl_runner, bi_reader;
+-- Databases (idempotent). CREATE DATABASE cannot run inside a DO block.
+SELECT format('CREATE DATABASE airflow OWNER airflow')
+WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'airflow') \gexec
+
+SELECT format('GRANT CONNECT ON DATABASE analytics TO rw_writer, etl_runner, bi_reader')
+WHERE EXISTS (SELECT 1 FROM pg_database WHERE datname = 'analytics') \gexec
 
 -- Schemas
 CREATE SCHEMA IF NOT EXISTS bronze;
